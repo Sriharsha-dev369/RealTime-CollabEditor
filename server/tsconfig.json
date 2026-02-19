@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    /* Change module to ESNext or NodeNext */
+    "module": "NodeNext", 
+    "target": "ESNext",
+    
+    /* Change resolution to match the module type */
+    "moduleResolution": "NodeNext", 
+    "resolveJsonModule": true,
+    "types": ["node"], 
+    "skipLibCheck": true,
+
+    /* Interop & JS Support */
+    "allowJs": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+
+    /* Build Artifacts */
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+    
+    /* Strictness & Safety */
+    "strict": true,
+    "jsx": "react-jsx",
+    
+    /* Important for ESM */
+    "verbatimModuleSyntax": true, 
+    "isolatedModules": true,
+    "moduleDetection": "force"
+  },
+  "include": ["src/**/*"]
+}
