@@ -1,17 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import Editor, { type OnMount, type OnChange } from "@monaco-editor/react";
-import type { editor } from "monaco-editor";
-import { socket } from "../socket";
 import * as monaco from "monaco-editor";
-import "./style.css";
+import { socket } from "../socket";
+import "../style.css";
 
 interface MonacoChange {
-  range: {
-    startLineNumber: number;
-    startColumn: number;
-    endLineNumber: number;
-    endColumn: number;
-  };
+  range: monaco.IRange;
   text: string;
   rangeOffset: number;
   rangeLength: number;
@@ -38,12 +32,50 @@ export default function CodeEditor() {
     joinedRef.current = joined;
   }, [joined]);
 
-  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const isRemoteChange = useRef(false);
   const remoteCursors = useRef<{ [key: string]: string[] }>({});
   const knownUsers = useRef<Set<string>>(new Set());
+  const styleSheetRef = useRef<HTMLStyleElement | null>(null);
 
+  // 1. Setup global style sheet for cursors
   useEffect(() => {
+    if (!styleSheetRef.current) {
+      const style = document.createElement("style");
+      style.id = "monaco-remote-cursor-styles";
+      document.head.appendChild(style);
+      styleSheetRef.current = style;
+    }
+  }, []);
+
+  const injectUserStyle = (userId: string, color: string, name: string) => {
+    if (knownUsers.current.has(userId) || !styleSheetRef.current?.sheet) return;
+
+    try {
+      const sheet = styleSheetRef.current.sheet;
+
+      // Rule 1: The cursor line color
+      sheet.insertRule(
+        `.cursor-${userId} { border-left: 2px solid ${color} !important; }`,
+        sheet.cssRules.length,
+      );
+
+      // Rule 2: The name tag content and background
+      sheet.insertRule(
+        `.label-${userId}::before { content: "${name}"; background-color: ${color} !important; }`,
+        sheet.cssRules.length,
+      );
+
+      knownUsers.current.add(userId);
+    } catch (e) {
+      console.error("CSS Injection failed:", e);
+    }
+  };
+
+  // 2. Socket Listeners (Dependent on 'joined' to have fresh scope)
+  useEffect(() => {
+    if (!joined) return;
+
     const handleInitCode = (fullCode: string) => {
       if (editorRef.current) {
         isRemoteChange.current = true;
@@ -55,10 +87,9 @@ export default function CodeEditor() {
     const handleReceiveDelta = (data: { changes: MonacoChange[] }) => {
       const editorInstance = editorRef.current;
       if (!editorInstance) return;
-
       isRemoteChange.current = true;
       editorInstance.executeEdits(
-        "remote-source",
+        "remote",
         data.changes.map((change) => ({
           range: change.range,
           text: change.text,
@@ -68,56 +99,31 @@ export default function CodeEditor() {
       isRemoteChange.current = false;
     };
 
-    const injectUserStyle = (userId: string, color: string, name: string) => {
-      if (knownUsers.current.has(userId)) return;
-      const styleId = `style-${userId}`;
-
-      const style = document.createElement("style");
-      style.id = styleId;
-      style.innerHTML = `
-    .cursor-${userId} { 
-      border-left-color: ${color} !important; 
-    }
-    .label-${userId}::before { 
-      content: "${name}"; 
-      background-color: ${color} !important; 
-    }
-  `;
-      document.head.appendChild(style); // MAKE SURE THIS LINE IS HERE
-      knownUsers.current.add(userId);
-    };
-
     const handleReceiveCursor = (data: RemoteCursorData) => {
-      const editorInstance = editorRef.current;
-      const model = editorInstance?.getModel();
+      const model = editorRef.current?.getModel();
+      if (!model) return;
 
-      if (!editorInstance || !model) return;
-
-      const { userId, position, color, name } = data;
-
-      injectUserStyle(userId, color, name);
+      injectUserStyle(data.userId, data.color, data.name);
 
       const newDecorations: monaco.editor.IModelDeltaDecoration[] = [
         {
           range: new monaco.Range(
-            position.lineNumber,
-            position.column,
-            position.lineNumber,
-            position.column,
+            data.position.lineNumber,
+            data.position.column,
+            data.position.lineNumber,
+            data.position.column,
           ),
           options: {
-            className: `remote-cursor cursor-${userId}`,
-            // This places the label node at the cursor position
-            beforeContentClassName: `cursor-label label-${userId}`,
+            className: `remote-cursor cursor-${data.userId}`,
+            beforeContentClassName: `cursor-label label-${data.userId}`,
             stickiness:
               monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
           },
         },
       ];
 
-      // UPDATED: Use model.deltaDecorations instead of editor.deltaDecorations
-      remoteCursors.current[userId] = model.deltaDecorations(
-        remoteCursors.current[userId] || [],
+      remoteCursors.current[data.userId] = model.deltaDecorations(
+        remoteCursors.current[data.userId] || [],
         newDecorations,
       );
     };
@@ -127,11 +133,17 @@ export default function CodeEditor() {
       if (model && remoteCursors.current[userId]) {
         model.deltaDecorations(remoteCursors.current[userId], []);
         delete remoteCursors.current[userId];
-        document.getElementById(`style-${userId}`)?.remove();
       }
     };
 
-    const handleNewUserJoined = () => {
+    const handleNewUserJoined = (data: RemoteCursorData) => {
+      // 1. Immediately inject the style so we are ready for them
+      if (data.userId && data.color) {
+        injectUserStyle(data.userId, data.color, data.name);
+      }
+
+      // 2. Respond by sending OUR cursor position to the new user
+      // so they see us immediately without waiting for us to move
       if (editorRef.current) {
         socket.emit("cursor_move", {
           roomId: roomIdRef.current,
@@ -154,7 +166,7 @@ export default function CodeEditor() {
       socket.off("new_user_joined", handleNewUserJoined);
       socket.disconnect();
     };
-  }, []);
+  }, [joined]);
 
   const handleJoin = () => {
     if (roomId.trim()) {
@@ -197,13 +209,13 @@ export default function CodeEditor() {
 
   const requestSync = useCallback(() => {
     const currentRoom = roomIdRef.current;
-    const isJoined = joinedRef.current; 
+    const isJoined = joinedRef.current;
 
     if (currentRoom && isJoined) {
       console.log("Requesting full sync...");
       socket.emit("request_full_sync", currentRoom);
     }
-  }, []); 
+  }, []);
 
   useEffect(() => {
     const handleReconnect = () => requestSync();
@@ -254,6 +266,7 @@ export default function CodeEditor() {
   );
 }
 
+// ... (Styles stay as they were in your code)
 const joinScreenStyles: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",

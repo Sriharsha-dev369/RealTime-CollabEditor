@@ -1,28 +1,27 @@
-/* Ensure the cursor line itself is visible */
 .remote-cursor {
     border-left: 2px solid;
-    height: 1.2em; /* Ensure it spans the line height */
+    margin-left: -1px;
+    z-index: 10;
 }
 
-/* The label container MUST have a position for the ::before to anchor to */
+/* The anchor point */
 .cursor-label {
-    position: relative;
+    position: absolute;
     display: inline-block;
-    width: 0;
-    height: 0;
 }
 
-/* The actual name tag */
+/* The actual floating name tag */
 .cursor-label::before {
     position: absolute;
-    top: -1.4em; /* Position above the current line */
-    left: -2px;
+    top: -20px; /* Moves it above the line */
+    left: 0;
     padding: 2px 6px;
     font-size: 11px;
+    font-weight: 600;
     font-family: sans-serif;
     color: white;
     white-space: nowrap;
     border-radius: 3px;
-    pointer-events: none; /* Don't block mouse clicks */
-    z-index: 100;
+    z-index: 1000;
+    pointer-events: none;
 }

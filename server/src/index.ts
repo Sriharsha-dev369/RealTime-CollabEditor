@@ -16,7 +16,6 @@ const io = new Server(server, {
 
 function applyChanges(oldCode: string, changes: any[]): string {
   let newCode = oldCode;
-  // We sort changes in reverse to avoid index shifting issues during a single batch
   const sortedChanges = [...changes].sort(
     (a, b) => b.rangeOffset - a.rangeOffset,
   );
@@ -31,8 +30,11 @@ function applyChanges(oldCode: string, changes: any[]): string {
   return newCode;
 }
 
-const roomStates = new Map<string, string>(); //we store this because , we cant trust Cleint.
-const userStates = new Map(); // socket.id -> { userData, roomId }
+const roomStates = new Map<string, string>();
+const userStates = new Map<
+  string,
+  { userId: string; name: string; color: string; roomId: string }
+>();
 
 io.on("connection", (socket) => {
   console.log(`User connected: ${socket.id}`);
@@ -46,10 +48,10 @@ io.on("connection", (socket) => {
       color: ["#ff4757", "#2ed573", "#1e90ff", "#ffa502", "#e056fd"][
         Math.floor(Math.random() * 5)
       ],
+      roomId: roomId,
     };
 
-    // Store the roomId so we know where they are during disconnect
-    userStates.set(socket.id, { userData, roomId });
+    userStates.set(socket.id, userData);
 
     if (!roomStates.has(roomId)) {
       roomStates.set(roomId, "// Welcome to " + roomId);
@@ -57,76 +59,51 @@ io.on("connection", (socket) => {
 
     socket.emit("init_code", roomStates.get(roomId));
 
-    // FIX: Match the event name the client is listening for
-    socket.to(roomId).emit("new_user_joined", { userId: socket.id });
+    socket.to(roomId).emit("new_user_joined", userData);
   });
 
-  // server.ts
   socket.on(
     "cursor_move",
     (data: {
       roomId: string;
       position: { lineNumber: number; column: number };
     }) => {
-      const userData = userStates.get(socket.id);
-      if (userData) {
+      const user = userStates.get(socket.id);
+      if (user) {
         socket.to(data.roomId).emit("receive_cursor", {
           userId: socket.id,
           position: data.position,
-          color: userData.color,
-          name: userData.name,
+          color: user.color,
+          name: user.name,
         });
       }
     },
   );
 
-  // server.ts
   socket.on("code_delta", (data) => {
     const { roomId, changes } = data;
-
-    // 1. Get what we currently have
     const currentCode = roomStates.get(roomId) || "";
-
-    // 2. Calculate the NEW full string
     const updatedCode = applyChanges(currentCode, changes);
 
-    // 3. IMPORTANT: Save this back to the Map!
-    // If you skip this, new users will only ever see the original welcome message.
     roomStates.set(roomId, updatedCode);
-
-    // 4. Send the small change to everyone else
     socket.to(roomId).emit("receive_delta", { changes });
   });
 
   socket.on("request_full_sync", (roomId) => {
-    // 1. Safety Check: Make sure the socket is actually in the room
-    // (In case the server restarted or the socket's session was cleared)
     socket.join(roomId);
-
-    // 2. Get the current master copy of the code
-    const currentCode = roomStates.get(roomId) || "";
-
-    // 3. Send ONLY to this specific user
-    // Using socket.emit (instead of io.to(roomId)) avoids flickering other users
-    socket.emit("init_code", currentCode);
-
-    console.log(`Syncing user ${socket.id} for room ${roomId}`);
+    socket.emit("init_code", roomStates.get(roomId) || "");
   });
 
   socket.on("disconnect", () => {
-    const session = userStates.get(socket.id);
-    if (!session) return;
+    const user = userStates.get(socket.id);
+    if (!user) return;
 
-    const { roomId } = session;
-
-    // 2. Focused Broadcast: Only tell the specific room
+    const { roomId } = user;
     socket.to(roomId).emit("user_left", socket.id);
     userStates.delete(socket.id);
 
-    // 3. Focused Cleanup: Only check the room the user was actually in
     const clientsInRoom = io.sockets.adapter.rooms.get(roomId);
     if (!clientsInRoom || clientsInRoom.size === 0) {
-      console.log(`Cleaning up empty room: ${roomId}`);
       roomStates.delete(roomId);
     }
   });
