@@ -1,4 +1,5 @@
-import CodeEditor from "./CodeEditor";
+import CodeEditor from "./components/CodeEditor";
+import "./App.css";
 
 function App() {
   return <CodeEditor />;

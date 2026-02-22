@@ -1,7 +1,4 @@
-Aspect	Controlled (Standard)	                    Semi-Controlled (Optimized)
-State	React is the "Source of Truth."	        Monaco is the "Source of Truth" for typing.
-Latency	Feels "heavy" on large files.	        Instant typing feel.
-Conflict	High risk of cursor jumping.	      Reduced risk (but not zero).
+
 
 
 

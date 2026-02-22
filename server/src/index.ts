@@ -31,23 +31,54 @@ function applyChanges(oldCode: string, changes: any[]): string {
   return newCode;
 }
 
-const roomStates = new Map<string, string>();
+const roomStates = new Map<string, string>(); //we store this because , we cant trust Cleint.
+const userStates = new Map(); // socket.id -> { userData, roomId }
 
 io.on("connection", (socket) => {
   console.log(`User connected: ${socket.id}`);
 
-  socket.on("join_room", (roomId: string) => {
+  socket.on("join_room", (roomId) => {
     socket.join(roomId);
 
-    // Check if room exists, if not initialize
+    const userData = {
+      userId: socket.id,
+      name: `User-${socket.id.substring(0, 4)}`,
+      color: ["#ff4757", "#2ed573", "#1e90ff", "#ffa502", "#e056fd"][
+        Math.floor(Math.random() * 5)
+      ],
+    };
+
+    // Store the roomId so we know where they are during disconnect
+    userStates.set(socket.id, { userData, roomId });
+
     if (!roomStates.has(roomId)) {
-      roomStates.set(roomId, "// Welcome to room: " + roomId);
+      roomStates.set(roomId, "// Welcome to " + roomId);
     }
 
-    const currentRoomCode = roomStates.get(roomId);
-    // Send the LATEST state to the user who just joined
-    socket.emit("init_code", currentRoomCode);
+    socket.emit("init_code", roomStates.get(roomId));
+
+    // FIX: Match the event name the client is listening for
+    socket.to(roomId).emit("new_user_joined", { userId: socket.id });
   });
+
+  // server.ts
+  socket.on(
+    "cursor_move",
+    (data: {
+      roomId: string;
+      position: { lineNumber: number; column: number };
+    }) => {
+      const userData = userStates.get(socket.id);
+      if (userData) {
+        socket.to(data.roomId).emit("receive_cursor", {
+          userId: socket.id,
+          position: data.position,
+          color: userData.color,
+          name: userData.name,
+        });
+      }
+    },
+  );
 
   // server.ts
   socket.on("code_delta", (data) => {
@@ -67,21 +98,36 @@ io.on("connection", (socket) => {
     socket.to(roomId).emit("receive_delta", { changes });
   });
 
-  // Add a heart-beat or a "version" check
-  socket.on("request_full_sync", (roomId: string) => {
+  socket.on("request_full_sync", (roomId) => {
+    // 1. Safety Check: Make sure the socket is actually in the room
+    // (In case the server restarted or the socket's session was cleared)
+    socket.join(roomId);
+
+    // 2. Get the current master copy of the code
     const currentCode = roomStates.get(roomId) || "";
-    // Send only to the requester to save bandwidth
+
+    // 3. Send ONLY to this specific user
+    // Using socket.emit (instead of io.to(roomId)) avoids flickering other users
     socket.emit("init_code", currentCode);
+
+    console.log(`Syncing user ${socket.id} for room ${roomId}`);
   });
 
   socket.on("disconnect", () => {
-    // Check if the room the user was in is now empty
-    for (const [roomId, state] of roomStates) {
-      const clientsInRoom = io.sockets.adapter.rooms.get(roomId);
-      if (!clientsInRoom || clientsInRoom.size === 0) {
-        console.log(`Cleaning up empty room: ${roomId}`);
-        roomStates.delete(roomId); // Free up memory
-      }
+    const session = userStates.get(socket.id);
+    if (!session) return;
+
+    const { roomId } = session;
+
+    // 2. Focused Broadcast: Only tell the specific room
+    socket.to(roomId).emit("user_left", socket.id);
+    userStates.delete(socket.id);
+
+    // 3. Focused Cleanup: Only check the room the user was actually in
+    const clientsInRoom = io.sockets.adapter.rooms.get(roomId);
+    if (!clientsInRoom || clientsInRoom.size === 0) {
+      console.log(`Cleaning up empty room: ${roomId}`);
+      roomStates.delete(roomId);
     }
   });
 });

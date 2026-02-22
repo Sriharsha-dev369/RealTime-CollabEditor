@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import Editor, { type OnMount, type OnChange } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
-import { socket } from "./socket";
+import { socket } from "../socket";
+import * as monaco from "monaco-editor";
+import "./style.css";
 
 interface MonacoChange {
   range: {
@@ -15,14 +17,32 @@ interface MonacoChange {
   rangeLength: number;
 }
 
+interface RemoteCursorData {
+  userId: string;
+  position: monaco.IPosition;
+  color: string;
+  name: string;
+}
+
 export default function CodeEditor() {
   const [roomId, setRoomId] = useState<string>("");
   const [joined, setJoined] = useState(false);
+  const roomIdRef = useRef(roomId);
+  const joinedRef = useRef(joined);
+
+  useEffect(() => {
+    roomIdRef.current = roomId;
+  }, [roomId]);
+
+  useEffect(() => {
+    joinedRef.current = joined;
+  }, [joined]);
 
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const isRemoteChange = useRef(false);
+  const remoteCursors = useRef<{ [key: string]: string[] }>({});
+  const knownUsers = useRef<Set<string>>(new Set());
 
-  // 1. Listeners setup (Runs once on mount)
   useEffect(() => {
     const handleInitCode = (fullCode: string) => {
       if (editorRef.current) {
@@ -48,39 +68,124 @@ export default function CodeEditor() {
       isRemoteChange.current = false;
     };
 
+    const injectUserStyle = (userId: string, color: string, name: string) => {
+      if (knownUsers.current.has(userId)) return;
+      const styleId = `style-${userId}`;
+
+      const style = document.createElement("style");
+      style.id = styleId;
+      style.innerHTML = `
+    .cursor-${userId} { 
+      border-left-color: ${color} !important; 
+    }
+    .label-${userId}::before { 
+      content: "${name}"; 
+      background-color: ${color} !important; 
+    }
+  `;
+      document.head.appendChild(style); // MAKE SURE THIS LINE IS HERE
+      knownUsers.current.add(userId);
+    };
+
+    const handleReceiveCursor = (data: RemoteCursorData) => {
+      const editorInstance = editorRef.current;
+      const model = editorInstance?.getModel();
+
+      if (!editorInstance || !model) return;
+
+      const { userId, position, color, name } = data;
+
+      injectUserStyle(userId, color, name);
+
+      const newDecorations: monaco.editor.IModelDeltaDecoration[] = [
+        {
+          range: new monaco.Range(
+            position.lineNumber,
+            position.column,
+            position.lineNumber,
+            position.column,
+          ),
+          options: {
+            className: `remote-cursor cursor-${userId}`,
+            // This places the label node at the cursor position
+            beforeContentClassName: `cursor-label label-${userId}`,
+            stickiness:
+              monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+          },
+        },
+      ];
+
+      // UPDATED: Use model.deltaDecorations instead of editor.deltaDecorations
+      remoteCursors.current[userId] = model.deltaDecorations(
+        remoteCursors.current[userId] || [],
+        newDecorations,
+      );
+    };
+
+    const handleUserLeft = (userId: string) => {
+      const model = editorRef.current?.getModel();
+      if (model && remoteCursors.current[userId]) {
+        model.deltaDecorations(remoteCursors.current[userId], []);
+        delete remoteCursors.current[userId];
+        document.getElementById(`style-${userId}`)?.remove();
+      }
+    };
+
+    const handleNewUserJoined = () => {
+      if (editorRef.current) {
+        socket.emit("cursor_move", {
+          roomId: roomIdRef.current,
+          position: editorRef.current.getPosition(),
+        });
+      }
+    };
+
     socket.on("init_code", handleInitCode);
     socket.on("receive_delta", handleReceiveDelta);
+    socket.on("receive_cursor", handleReceiveCursor);
+    socket.on("user_left", handleUserLeft);
+    socket.on("new_user_joined", handleNewUserJoined);
 
     return () => {
       socket.off("init_code", handleInitCode);
       socket.off("receive_delta", handleReceiveDelta);
+      socket.off("receive_cursor", handleReceiveCursor);
+      socket.off("user_left", handleUserLeft);
+      socket.off("new_user_joined", handleNewUserJoined);
       socket.disconnect();
     };
   }, []);
 
-  // 2. Triggered by Button click
   const handleJoin = () => {
     if (roomId.trim()) {
       socket.connect();
-      setJoined(true); // This swaps the UI to show the Editor
+      setJoined(true);
     }
   };
 
-  // 3. Triggered by Monaco mounting
   const handleEditorOnMount: OnMount = (editor) => {
     editorRef.current = editor;
-    editor.focus();
 
-    // ONLY join the room here. This ensures that when 'init_code'
-    // arrives, the editor is ready to display it.
-    socket.emit("join_room", roomId);
+    let lastEmit = 0;
+    editor.onDidChangeCursorPosition((e) => {
+      const now = Date.now();
+      if (now - lastEmit > 50) {
+        socket.emit("cursor_move", {
+          roomId: roomIdRef.current,
+          position: e.position,
+        });
+        lastEmit = now;
+      }
+    });
+
+    socket.emit("join_room", roomIdRef.current);
   };
 
   const handleEditorChange: OnChange = (_value, event) => {
     if (isRemoteChange.current || !event.changes) return;
 
     socket.emit("code_delta", {
-      roomId,
+      roomId: roomIdRef.current,
       changes: event.changes.map((c) => ({
         range: c.range,
         text: c.text,
@@ -90,26 +195,24 @@ export default function CodeEditor() {
     });
   };
 
-  // 2. Wrap requestSync so its "identity" is stable
   const requestSync = useCallback(() => {
-    if (roomId && joined) {
+    const currentRoom = roomIdRef.current;
+    const isJoined = joinedRef.current; 
+
+    if (currentRoom && isJoined) {
       console.log("Requesting full sync...");
-      socket.emit("request_full_sync", roomId);
+      socket.emit("request_full_sync", currentRoom);
     }
-  }, [roomId, joined]); // Only re-create if these change
+  }, []); 
 
   useEffect(() => {
-    // 3. This now runs only when the socket connects or requestSync identity changes
-    const handleReconnect = () => {
-      requestSync();
-    };
+    const handleReconnect = () => requestSync();
 
     socket.on("connect", handleReconnect);
-
     return () => {
       socket.off("connect", handleReconnect);
     };
-  }, [requestSync]); // Now safe to include
+  }, [requestSync]);
 
   if (!joined) {
     return (
@@ -151,7 +254,6 @@ export default function CodeEditor() {
   );
 }
 
-// Minimalist styles for clarity
 const joinScreenStyles: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
