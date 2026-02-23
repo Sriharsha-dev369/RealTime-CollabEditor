@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+@theme {
+    --font-sans: "Inter", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+    --color-brand-blue: #0070f3;
+    --color-brand-red: #ff0000;
+}
+
+/* Container for the cursor line */
+/* The vertical bar */
+.remote-cursor {
+    width: 2px !important;
+    z-index: 100;
+}
+
+/* The label container - MUST have 0 width to not push text */
+.cursor-label {
+    position: absolute !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
+/* The actual floating name tag */
+[class*="label-"]::before {
+    position: absolute !important;
+    top: -22px !important;
+    /* Float above the line */
+    left: 0 !important;
+    padding: 1px 6px !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    font-family: sans-serif !important;
+    color: white !important;
+    border-radius: 4px 4px 4px 0px !important;
+    white-space: nowrap !important;
+    pointer-events: none !important;
+    /* Critical: click through the name */
+    user-select: none !important;
+    z-index: 1000 !important;
+}
+
+
+
+/* Task	                      Where to do it
+Installation	         src/index.css via @import
+Custom Colors/Fonts	    src/index.css inside @theme
+Daily Styling	        Directly in your .jsx files using className
+Global Backgrounds	        Use Tailwind classes on the body tag in index.html */

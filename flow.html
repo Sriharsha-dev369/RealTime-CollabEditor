@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RealTime-CollabEditor — System Flow</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface-2: #1c2333;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text-dim: #8b949e;
+      --accent: #58a6ff;
+      --accent-2: #7ee787;
+      --accent-3: #d2a8ff;
+      --accent-4: #ff7b72;
+      --accent-5: #ffa657;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      padding: 0;
+    }
+
+    /* Hero */
+    .hero {
+      text-align: center;
+      padding: 80px 40px 60px;
+      background: linear-gradient(135deg, #0d1117 0%, #1a1e2e 50%, #0d1117 100%);
+      border-bottom: 1px solid var(--border);
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -50%; left: -50%;
+      width: 200%; height: 200%;
+      background: radial-gradient(circle at 50% 50%, rgba(88,166,255,0.06) 0%, transparent 50%);
+      animation: pulse 8s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 0.5; }
+      50% { transform: scale(1.1); opacity: 1; }
+    }
+    .hero h1 {
+      font-size: 2.8rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--accent), var(--accent-3));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      position: relative;
+      margin-bottom: 12px;
+    }
+    .hero p {
+      color: var(--text-dim);
+      font-size: 1.15rem;
+      position: relative;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 40px 30px;
+    }
+
+    /* Section Cards */
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 40px;
+      margin-bottom: 32px;
+      transition: border-color 0.3s;
+    }
+    .section:hover { border-color: var(--accent); }
+
+    .section h2 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .section h2 .badge {
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .badge-blue { background: rgba(88,166,255,0.15); color: var(--accent); }
+    .badge-green { background: rgba(126,231,135,0.15); color: var(--accent-2); }
+    .badge-purple { background: rgba(210,168,255,0.15); color: var(--accent-3); }
+    .badge-red { background: rgba(255,123,114,0.15); color: var(--accent-4); }
+    .badge-orange { background: rgba(255,166,87,0.15); color: var(--accent-5); }
+
+    .section .subtitle {
+      color: var(--text-dim);
+      margin-bottom: 24px;
+      font-size: 0.95rem;
+    }
+
+    /* Diagram containers */
+    .diagram-box {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 30px;
+      margin: 20px 0;
+      overflow-x: auto;
+    }
+    .diagram-box .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Explanation blocks */
+    .explain {
+      display: grid;
+      grid-template-columns: 4px 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+    .explain .bar {
+      border-radius: 4px;
+    }
+    .bar-blue { background: var(--accent); }
+    .bar-green { background: var(--accent-2); }
+    .bar-purple { background: var(--accent-3); }
+    .bar-red { background: var(--accent-4); }
+    .bar-orange { background: var(--accent-5); }
+
+    .explain .content h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .explain .content p {
+      color: var(--text-dim);
+      font-size: 0.9rem;
+    }
+
+    /* Code blocks */
+    pre {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 22px;
+      overflow-x: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      line-height: 1.7;
+      margin: 14px 0;
+      color: var(--text-dim);
+    }
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85em;
+      background: rgba(88,166,255,0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--accent);
+    }
+
+    /* Event table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 0.88rem;
+    }
+    th {
+      background: var(--surface-2);
+      padding: 12px 16px;
+      text-align: left;
+      font-weight: 600;
+      color: var(--accent);
+      border-bottom: 2px solid var(--border);
+    }
+    td {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-dim);
+    }
+    tr:hover td { background: rgba(88,166,255,0.03); }
+
+    /* Step indicators */
+    .steps {
+      counter-reset: step;
+      list-style: none;
+      padding: 0;
+    }
+    .steps li {
+      counter-increment: step;
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    .steps li::before {
+      content: counter(step);
+      flex-shrink: 0;
+      width: 32px; height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(88,166,255,0.12);
+      color: var(--accent);
+      border-radius: 50%;
+      font-weight: 700;
+      font-size: 0.85rem;
+    }
+    .steps li .step-content h4 {
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+    .steps li .step-content p {
+      color: var(--text-dim);
+      font-size: 0.9rem;
+    }
+
+    /* File tag */
+    .file-tag {
+      display: inline-block;
+      background: rgba(210,168,255,0.12);
+      color: var(--accent-3);
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 24px 0;
+    }
+  </style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>RealTime-CollabEditor</h1>
+  <p>Complete System Architecture &amp; Data Flow</p>
+</div>
+
+<div class="container">
+
+  <!-- ===== ARCHITECTURE OVERVIEW ===== -->
+  <div class="section">
+    <h2>🏗️ Architecture Overview <span class="badge badge-blue">System</span></h2>
+    <p class="subtitle">How the client and server connect — the big picture.</p>
+
+    <div class="diagram-box">
+      <pre class="mermaid">
+graph LR
+    subgraph Client ["🖥️ Client &lpar;React + Vite&rpar;"]
+        A["CodeEditor.tsx"] --> B["useCollaboration&lpar;&rpar;"]
+        B --> C["useRemoteCursors&lpar;&rpar;"]
+        A --> D["socket.ts"]
+        B --> D
+    end
+    D <-->|"Socket.IO"| E["🖧 Server &lpar;Express + Socket.IO&rpar;"]
+    E --> F["roomStates &lpar;Map&rpar;"]
+    E --> G["userStates &lpar;Map&rpar;"]
+
+    style Client fill:#161b22,stroke:#30363d,color:#e6edf3
+    style E fill:#1c2333,stroke:#58a6ff,color:#58a6ff
+    style F fill:#1c2333,stroke:#7ee787,color:#7ee787
+    style G fill:#1c2333,stroke:#d2a8ff,color:#d2a8ff
+      </pre>
+    </div>
+
+    <div class="explain"><div class="bar bar-blue"></div><div class="content">
+      <h3>Client Side</h3>
+      <p><code>CodeEditor.tsx</code> is the main UI — it renders the lobby or the Monaco editor. It uses <code>useCollaboration()</code> which handles all Socket.IO event listeners, which in turn uses <code>useRemoteCursors()</code> to render other users' cursors.</p>
+    </div></div>
+    <div class="explain"><div class="bar bar-green"></div><div class="content">
+      <h3>Server Side</h3>
+      <p>A Node.js/Express server with Socket.IO. It maintains two in-memory Maps: <code>roomStates</code> (the current document text per room) and <code>userStates</code> (each user's name, color, and room).</p>
+    </div></div>
+  </div>
+
+  <!-- ===== FILE DEPENDENCY GRAPH ===== -->
+  <div class="section">
+    <h2>📁 File Dependency Graph <span class="badge badge-purple">Structure</span></h2>
+    <p class="subtitle">How every file imports from and depends on other files.</p>
+
+    <div class="diagram-box">
+      <pre class="mermaid">
+graph TD
+    main["main.tsx"] --> App["App.tsx"]
+    App --> CE["CodeEditor.tsx"]
+    CE --> sock["socket.ts"]
+    CE --> useC["useCollaboration&lpar;&rpar;"]
+    useC --> sock
+    useC --> useRC["useRemoteCursors&lpar;&rpar;"]
+    useC --> types["collabration.ts &lpar;types&rpar;"]
+    useRC --> types
+    CE -.->|"CSS styles for cursors"| idx["index.css"]
+
+    style main fill:#1c2333,stroke:#ffa657,color:#ffa657
+    style App fill:#1c2333,stroke:#ffa657,color:#ffa657
+    style CE fill:#161b22,stroke:#58a6ff,color:#58a6ff
+    style sock fill:#161b22,stroke:#ff7b72,color:#ff7b72
+    style useC fill:#161b22,stroke:#7ee787,color:#7ee787
+    style useRC fill:#161b22,stroke:#d2a8ff,color:#d2a8ff
+    style types fill:#161b22,stroke:#8b949e,color:#8b949e
+    style idx fill:#161b22,stroke:#8b949e,color:#8b949e
+      </pre>
+    </div>
+  </div>
+
+  <!-- ===== FLOW 1: OPENING THE APP ===== -->
+  <div class="section">
+    <h2>1️⃣ Opening the App <span class="badge badge-green">User Action</span></h2>
+    <p class="subtitle">What happens when the user first loads the page.</p>
+
+    <div class="diagram-box">
+      <pre class="mermaid">
+flowchart LR
+    A["🌐 Browser loads page"] --> B["main.tsx renders &lt;App /&gt;"]
+    B --> C["App.tsx renders &lt;CodeEditor /&gt;"]
+    C --> D{"joined === false?"}
+    D -->|Yes| E["🏠 Show Lobby Screen"]
+    D -->|No| F["📝 Show Monaco Editor"]
+
+    style A fill:#0d1117,stroke:#58a6ff,color:#58a6ff
+    style E fill:#1c2333,stroke:#7ee787,color:#7ee787
+    style F fill:#1c2333,stroke:#d2a8ff,color:#d2a8ff
+      </pre>
+    </div>
+
+    <div class="explain"><div class="bar bar-green"></div><div class="content">
+      <h3>Socket is NOT connected yet</h3>
+      <p><code>socket.ts</code> uses <code>autoConnect: false</code> — the socket only connects after the user explicitly clicks "Join Room". No server resources are wasted on idle visitors.</p>
+    </div></div>
+  </div>
+
+  <!-- ===== FLOW 2: JOINING A ROOM ===== -->
+  <div class="section">
+    <h2>2️⃣ Joining a Room <span class="badge badge-blue">User Action</span></h2>
+    <p class="subtitle">The complete handshake when a user enters a room ID and clicks Join.</p>
+
+    <div class="diagram-box">
+      <pre class="mermaid">
+sequenceDiagram
+    participant U as 👤 User
+    participant CE as CodeEditor
+    participant S as Socket.IO Client
+    participant SV as 🖧 Server
+
+    U->>CE: Clicks "Join Room"
+    CE->>S: socket.connect&lpar;&rpar;
+    CE->>CE: setJoined&lpar;true&rpar; → Re-render
+    Note over CE: Monaco Editor mounts
+    CE->>S: emit&lpar;"join_room", roomId&rpar;
+    S->>SV: join_room event
+    SV->>SV: Create userData &lpar;name, color&rpar;
+    SV->>SV: Create room if new
+    SV-->>S: emit&lpar;"init_code", fullDocument&rpar;
+    SV-->>SV: Broadcast "new_user_joined" to others
+    S->>CE: handleInitCode&lpar;&rpar;
+    CE->>CE: editor.setValue&lpar;fullCode&rpar;
+      </pre>
+    </div>
+
+    <ol class="steps">
+      <li><div class="step-content">
+        <h4><span class="file-tag">CodeEditor.tsx</span> — handleJoin()</h4>
+        <p>Validates the room ID isn't empty, then calls <code>socket.connect()</code> and sets <code>joined = true</code>. This triggers a re-render that shows the Monaco editor instead of the lobby.</p>
+      </div></li>
+      <li><div class="step-content">
+        <h4><span class="file-tag">CodeEditor.tsx</span> — handleEditorOnMount()</h4>
+        <p>When Monaco mounts, it stores the editor instance in <code>editorRef</code>, sets up throttled cursor tracking (50ms), and emits <code>join_room</code>. The join is emitted here (not in handleJoin) because the editor must exist before the server responds with <code>init_code</code>.</p>
+      </div></li>
+      <li><div class="step-content">
+        <h4><span class="file-tag">server/index.ts</span> — join_room handler</h4>
+        <p>Joins the Socket.IO room, generates a random color and display name for the user, initializes the room document if it's new, sends the full document back to the joiner, and broadcasts <code>new_user_joined</code> to everyone else.</p>
+      </div></li>
+      <li><div class="step-content">
+        <h4><span class="file-tag">useCollabration.tsx</span> — handleInitCode()</h4>
+        <p>Sets the editor content with <code>setValue()</code>. Wraps it with <code>isRemoteChange = true</code> to prevent the onChange handler from echoing the set back to the server (infinite loop prevention).</p>
+      </div></li>
+    </ol>
+  </div>
+
+  <!-- ===== FLOW 3: TYPING ===== -->
+  <div class="section">
+    <h2>3️⃣ Typing — Real-Time Edit Sync <span class="badge badge-red">Core Flow</span></h2>
+    <p class="subtitle">The most critical flow — how keystrokes travel from one user's keyboard to every other user's screen.</p>
+
+    <div class="diagram-box">
+      <pre class="mermaid">
+sequenceDiagram
+    participant U as 👤 User A
+    participant M as Monaco Editor
+    participant CE as CodeEditor
+    participant S as Socket
+    participant SV as 🖧 Server
+    participant O as 👥 Other Clients
+
+    U->>M: Types "hello"
+    M->>CE: onChange&lpar;value, event&rpar;
+    CE->>CE: Check isRemoteChange → false ✓
+    CE->>S: emit&lpar;"code_delta", {roomId, changes}&rpar;
+    S->>SV: code_delta
+    SV->>SV: applyChanges&lpar;&rpar; → update roomStates
+    SV-->>O: emit&lpar;"receive_delta", {changes}&rpar;
+    O->>O: handleReceiveDelta&lpar;&rpar;
+    O->>O: isRemoteChange = true
+    O->>M: executeEdits&lpar;"remote", changes&rpar;
+    O->>O: isRemoteChange = false
+      </pre>
+    </div>
+
+    <div class="explain"><div class="bar bar-red"></div><div class="content">
+      <h3>Echo Loop Prevention — The <code>isRemoteChange</code> Ref</h3>
+      <p>When remote changes arrive, <code>executeEdits()</code> triggers Monaco's <code>onChange</code>. Without the <code>isRemoteChange</code> guard, the client would re-emit that change back → infinite loop. The ref acts as a flag: set it <code>true</code> before applying remote changes, then <code>false</code> right after.</p>
+    </div></div>
+
+    <div class="explain"><div class="bar bar-blue"></div><div class="content">
+      <h3>Why <code>executeEdits()</code> instead of <code>setValue()</code>?</h3>
+      <p><code>setValue()</code> replaces the entire document — destroying cursor position, undo history, and selections. <code>executeEdits()</code> applies surgical, range-based edits. The remote user's cursor stays in place.</p>
+    </div></div>
+
+    <div class="explain"><div class="bar bar-purple"></div><div class="content">
+      <h3>Why <code>forceMoveMarkers: true</code>?</h3>
+      <p>If User A types right before User B's cursor, User B's cursor should shift forward. This flag ensures markers move to accommodate inserted text, rather than staying at stale positions.</p>
+    </div></div>
+
+    <div class="divider"></div>
+    <h3 style="margin-bottom:12px">Server-side: <code>applyChanges()</code></h3>
+    <pre>function applyChanges(oldCode, changes) {
+  // Sort changes by offset DESCENDING
+  // → Apply from end of document backward
+  // → Earlier offsets remain valid
+  const sorted = [...changes].sort((a, b) => b.rangeOffset - a.rangeOffset);
+  for (const { rangeOffset, rangeLength, text } of sorted) {
+    newCode = newCode.substring(0, rangeOffset)
+            + text
+            + newCode.substring(rangeOffset + rangeLength);
+  }
+}</pre>
+
+    <div class="explain"><div class="bar bar-orange"></div><div class="content">
+      <h3>Why sort descending by offset?</h3>
+      <p>When multiple changes are applied (e.g., find-and-replace-all), editing an early part of the string shifts all later offsets. By applying from the END backward, earlier offsets remain unchanged. Classic text-editing technique.</p>
+    </div></div>
+  </div>
+
+  <!-- ===== FLOW 4: CURSOR MOVEMENT ===== -->
+  <div class="section">
+    <h2>4️⃣ Live Cursor Tracking <span class="badge badge-purple">Awareness</span></h2>
+    <p class="subtitle">How you see other users' cursors with their names and colors in real-time.</p>
+
+    <div class="diagram-box">
+      <pre class="mermaid">
+sequenceDiagram
+    participant A as 👤 User A
+    participant M as Monaco &lpar;A&rpar;
+    participant S as Socket
+    participant SV as 🖧 Server
+    participant O as 👤 User B's Client
+
+    A->>M: Moves cursor / Types
+    M->>M: onDidChangeCursorPosition fires
+    Note over M: Throttled: max 1 per 50ms
+    M->>S: emit&lpar;"cursor_move", {roomId, position}&rpar;
+    S->>SV: cursor_move
+    SV->>SV: Enrich with user's color + name
+    SV-->>O: emit&lpar;"receive_cursor", RemoteCursorData&rpar;
+    O->>O: injectStyle&lpar;&rpar; → Dynamic CSS
+    O->>M: deltaDecorations&lpar;&rpar; → Render cursor
+      </pre>
+    </div>
+
+    <div class="diagram-box">
+      <pre class="mermaid">
+flowchart TD
+    A["receive_cursor event arrives"] --> B["injectStyle&lpar;userId, color, name&rpar;"]
+    B --> C{"Style tag already exists?"}
+    C -->|Yes| D["Skip injection"]
+    C -->|No| E["Create &lt;style&gt; tag in &lt;head&gt;"]
+    E --> F[".cursor-{id} → background-color"]
+    E --> G[".label-{id}::before → name + color"]
+    A --> H["applyCursor&lpar;data&rpar;"]
+    H --> I["deltaDecorations&lpar;oldIds, newDeco&rpar;"]
+    I --> J["🎯 Colored cursor bar + floating name tag"]
+
+    style J fill:#1c2333,stroke:#7ee787,color:#7ee787
+      </pre>
+    </div>
+
+    <div class="explain"><div class="bar bar-purple"></div><div class="content">
+      <h3>Why dynamic <code>&lt;style&gt;</code> tag injection?</h3>
+      <p>Each user has a unique color and name. You can't pre-define CSS for unknown users. By creating a per-user <code>&lt;style&gt;</code> element, each cursor gets its own color and <code>::before</code> name label. The tags are cleaned up when a user leaves.</p>
+    </div></div>
+    <div class="explain"><div class="bar bar-blue"></div><div class="content">
+      <h3>Why <code>deltaDecorations()</code>?</h3>
+      <p>Monaco's replacement API — pass old decoration IDs and new specs, it atomically swaps them. This ensures each user has exactly ONE cursor decoration at all times, no stale ghost cursors.</p>
+    </div></div>
+    <div class="explain"><div class="bar bar-green"></div><div class="content">
+      <h3>Why <code>pointer-events: none</code> on cursor labels?</h3>
+      <p>Name labels float over the editor. Without this, clicking near a label would select the label instead of placing your cursor in the code.</p>
+    </div></div>
+  </div>
+
+  <!-- ===== FLOW 5: NEW USER JOINS ===== -->
+  <div class="section">
+    <h2>5️⃣ Another User Joins <span class="badge badge-green">Awareness</span></h2>
+    <p class="subtitle">How existing users react when someone new enters the room.</p>
+
+    <div class="diagram-box">
+      <pre class="mermaid">
+sequenceDiagram
+    participant B as 👤 User B &lpar;new&rpar;
+    participant SV as 🖧 Server
+    participant A as 👤 User A &lpar;existing&rpar;
+
+    B->>SV: join_room
+    SV-->>B: init_code &lpar;full document&rpar;
+    SV-->>A: new_user_joined &lpar;B's userId, color, name&rpar;
+    A->>A: injectUserStyle&lpar;&rpar; for B
+    A->>SV: emit cursor_move &lpar;A's current position&rpar;
+    SV-->>B: receive_cursor &lpar;A's cursor&rpar;
+    Note over B: B now sees A's cursor instantly
+      </pre>
+    </div>
+
+    <div class="explain"><div class="bar bar-green"></div><div class="content">
+      <h3>Why does User A re-emit their cursor when User B joins?</h3>
+      <p>Without this, User B wouldn't see User A's cursor until A next moves it. By re-emitting on <code>new_user_joined</code>, B gets instant awareness of all existing users' positions.</p>
+    </div></div>
+  </div>
+
+  <!-- ===== FLOW 6: USER DISCONNECTS ===== -->
+  <div class="section">
+    <h2>6️⃣ User Disconnects <span class="badge badge-red">Cleanup</span></h2>
+    <p class="subtitle">What the system cleans up when someone leaves.</p>
+
+    <div class="diagram-box">
+      <pre class="mermaid">
+sequenceDiagram
+    participant B as 👤 User B &lpar;leaving&rpar;
+    participant SV as 🖧 Server
+    participant A as 👤 User A
+
+    B->>SV: disconnect
+    SV->>SV: Look up user in userStates
+    SV-->>A: emit&lpar;"user_left", B's socketId&rpar;
+    SV->>SV: Delete B from userStates
+    SV->>SV: If room empty → delete roomStates
+    A->>A: removeCursor&lpar;socketId&rpar;
+    A->>A: deltaDecorations&lpar;oldIds, []&rpar; → remove
+    A->>A: Remove B's &lt;style&gt; tag from DOM
+      </pre>
+    </div>
+
+    <div class="explain"><div class="bar bar-red"></div><div class="content">
+      <h3>Why delete room state when empty?</h3>
+      <p>Memory management. Without cleanup, <code>roomStates</code> would grow forever as users create and abandon rooms. When the last person leaves, the room is garbage-collected.</p>
+    </div></div>
+  </div>
+
+  <!-- ===== FLOW 7: RECONNECTION ===== -->
+  <div class="section">
+    <h2>7️⃣ Reconnection <span class="badge badge-orange">Resilience</span></h2>
+    <p class="subtitle">How the system recovers if the WebSocket connection drops.</p>
+
+    <div class="diagram-box">
+      <pre class="mermaid">
+sequenceDiagram
+    participant C as 🖥️ Client
+    participant S as Socket.IO
+    participant SV as 🖧 Server
+
+    Note over C,S: ⚡ Connection drops
+    S->>S: Auto-reconnect &lpar;Socket.IO built-in&rpar;
+    S->>SV: connect event
+    C->>C: "connect" listener fires
+    C->>SV: emit&lpar;"request_full_sync", roomId&rpar;
+    SV->>SV: Re-join room + get latest doc
+    SV-->>C: emit&lpar;"init_code", fullDocument&rpar;
+    C->>C: editor.setValue&lpar;fullDoc&rpar;
+    Note over C: ✅ Back in sync
+      </pre>
+    </div>
+
+    <div class="explain"><div class="bar bar-orange"></div><div class="content">
+      <h3>Why re-fetch the full document?</h3>
+      <p>During a disconnect, the client may miss multiple <code>receive_delta</code> events. Tracking missed events is complex. It's simpler and more reliable to just re-fetch the entire document — a pragmatic MVP approach.</p>
+    </div></div>
+  </div>
+
+  <!-- ===== SOCKET EVENTS TABLE ===== -->
+  <div class="section">
+    <h2>📡 All Socket Events <span class="badge badge-blue">Reference</span></h2>
+    <p class="subtitle">Complete list of every socket event in the system.</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Event</th>
+          <th>Direction</th>
+          <th>Payload</th>
+          <th>Purpose</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>join_room</code></td>
+          <td>Client → Server</td>
+          <td><code>roomId</code></td>
+          <td>Join a collaboration room</td>
+        </tr>
+        <tr>
+          <td><code>init_code</code></td>
+          <td>Server → Client</td>
+          <td><code>string</code> (full doc)</td>
+          <td>Send current document to joiner</td>
+        </tr>
+        <tr>
+          <td><code>new_user_joined</code></td>
+          <td>Server → Others</td>
+          <td><code>RemoteCursorData</code></td>
+          <td>Notify existing users of newcomer</td>
+        </tr>
+        <tr>
+          <td><code>code_delta</code></td>
+          <td>Client → Server</td>
+          <td><code>{roomId, changes[]}</code></td>
+          <td>Send local edits</td>
+        </tr>
+        <tr>
+          <td><code>receive_delta</code></td>
+          <td>Server → Others</td>
+          <td><code>{changes[]}</code></td>
+          <td>Broadcast remote edits</td>
+        </tr>
+        <tr>
+          <td><code>cursor_move</code></td>
+          <td>Client → Server</td>
+          <td><code>{roomId, position}</code></td>
+          <td>Send cursor position</td>
+        </tr>
+        <tr>
+          <td><code>receive_cursor</code></td>
+          <td>Server → Others</td>
+          <td><code>RemoteCursorData</code></td>
+          <td>Broadcast cursor position</td>
+        </tr>
+        <tr>
+          <td><code>user_left</code></td>
+          <td>Server → Others</td>
+          <td><code>socketId</code></td>
+          <td>Notify when user disconnects</td>
+        </tr>
+        <tr>
+          <td><code>request_full_sync</code></td>
+          <td>Client → Server</td>
+          <td><code>roomId</code></td>
+          <td>Request full doc on reconnect</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ===== CLEANUP PATTERN ===== -->
+  <div class="section">
+    <h2>🧹 useEffect Cleanup Pattern <span class="badge badge-orange">Important</span></h2>
+    <p class="subtitle">Why every <code>socket.on()</code> has a matching <code>socket.off()</code> in the cleanup function.</p>
+
+    <div class="diagram-box">
+      <pre class="mermaid">
+flowchart LR
+    A["useEffect runs"] --> B["socket.on&lpar;'event', handler&rpar; × 6"]
+    B --> C["Component lives..."]
+    C --> D["Component unmounts OR deps change"]
+    D --> E["Cleanup function runs"]
+    E --> F["socket.off&lpar;'event', handler&rpar; × 6"]
+    F --> G["socket.disconnect&lpar;&rpar;"]
+
+    style A fill:#1c2333,stroke:#7ee787,color:#7ee787
+    style E fill:#1c2333,stroke:#ff7b72,color:#ff7b72
+    style G fill:#1c2333,stroke:#ff7b72,color:#ff7b72
+      </pre>
+    </div>
+
+    <div class="explain"><div class="bar bar-orange"></div><div class="content">
+      <h3>Without cleanup, you get:</h3>
+      <p>Stacked duplicate handlers on each re-render (React StrictMode runs effects twice in dev), memory leaks from dangling listeners, and ghost socket connections that never close.</p>
+    </div></div>
+  </div>
+
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      primaryColor: '#1c2333',
+      primaryTextColor: '#e6edf3',
+      primaryBorderColor: '#30363d',
+      lineColor: '#58a6ff',
+      secondaryColor: '#161b22',
+      tertiaryColor: '#0d1117',
+      noteBkgColor: '#1c2333',
+      noteTextColor: '#e6edf3',
+      noteBorderColor: '#30363d',
+      actorBkg: '#161b22',
+      actorTextColor: '#e6edf3',
+      actorBorder: '#58a6ff',
+      signalColor: '#58a6ff',
+      signalTextColor: '#e6edf3',
+      labelBoxBkgColor: '#1c2333',
+      labelTextColor: '#e6edf3',
+    },
+    sequence: {
+      mirrorActors: false,
+      actorMargin: 80,
+      messageMargin: 40,
+    },
+    flowchart: {
+      curve: 'basis',
+      padding: 20,
+    },
+  });
+</script>
+
+</body>
+</html>
