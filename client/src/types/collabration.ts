@@ -13,3 +13,16 @@ export interface RemoteCursorData {
   color: string;
   name: string;
 }
+
+export interface RemoteSelectionData {
+  userId: string;
+  selection: monaco.IRange;
+  color: string;
+  name: string;
+}
+
+export interface UserData {
+  userId: string;
+  name: string;
+  roomId: string;
+}

@@ -7,10 +7,11 @@ import * as monaco from "monaco-editor";
 export const useCollaboration = (
   roomId: string,
   joined: boolean,
-  editorRef: React.MutableRefObject<monaco.editor.IStandaloneCodeEditor | null>
+  editorRef: React.MutableRefObject<monaco.editor.IStandaloneCodeEditor | null>,
 ) => {
   const isRemoteChange = useRef(false);
-  const { applyCursor, removeCursor, injectUserStyle } = useRemoteCursors(editorRef);
+  const { applyCursor, applySelection, removeCursor, injectUserStyle } =
+    useRemoteCursors(editorRef);
 
   useEffect(() => {
     if (!joined) return;
@@ -26,11 +27,14 @@ export const useCollaboration = (
     const handleReceiveDelta = (data: { changes: MonacoChange[] }) => {
       if (!editorRef.current) return;
       isRemoteChange.current = true;
-      editorRef.current.executeEdits("remote", data.changes.map((c) => ({
-        range: c.range,
-        text: c.text,
-        forceMoveMarkers: true,
-      })));
+      editorRef.current.executeEdits(
+        "remote",
+        data.changes.map((c) => ({
+          range: c.range,
+          text: c.text,
+          forceMoveMarkers: true,
+        })),
+      );
       isRemoteChange.current = false;
     };
 
@@ -39,7 +43,10 @@ export const useCollaboration = (
         injectUserStyle(data.userId, data.color, data.name);
       }
       if (editorRef.current) {
-        socket.emit("cursor_move", { roomId, position: editorRef.current.getPosition() });
+        socket.emit("cursor_move", {
+          roomId,
+          position: editorRef.current.getPosition(),
+        });
       }
     };
 
@@ -48,20 +55,32 @@ export const useCollaboration = (
     socket.on("init_code", handleInitCode);
     socket.on("receive_delta", handleReceiveDelta);
     socket.on("receive_cursor", applyCursor);
+    socket.on("receive_selection", applySelection);
     socket.on("user_left", removeCursor);
     socket.on("new_user_joined", handleNewUserJoined);
     socket.on("connect", requestSync);
+    // socket.on("users_list",usersList);
 
     return () => {
       socket.off("init_code", handleInitCode);
       socket.off("receive_delta", handleReceiveDelta);
       socket.off("receive_cursor", applyCursor);
+      socket.off("receive_selection", applySelection);
       socket.off("user_left", removeCursor);
       socket.off("new_user_joined", handleNewUserJoined);
       socket.off("connect", requestSync);
+      // socket.off("users_list",usersList);
       socket.disconnect();
     };
-  }, [joined, roomId, editorRef, applyCursor, removeCursor, injectUserStyle]);
+  }, [
+    joined,
+    roomId,
+    editorRef,
+    applyCursor,
+    applySelection,
+    removeCursor,
+    injectUserStyle,
+  ]);
 
   return { isRemoteChange };
 };

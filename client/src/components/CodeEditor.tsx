@@ -3,13 +3,15 @@ import Editor, { type OnMount, type OnChange } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
 import { socket } from "../socket";
 import { useCollaboration } from "../hooks/useCollabration";
+import { UsersSideBar } from "./UserSideBar";
 
 export default function CodeEditor() {
   const [roomId, setRoomId] = useState("");
   const [joined, setJoined] = useState(false);
-  
+  const [user,setUser] = useState("");
+
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
-  
+
   const { isRemoteChange } = useCollaboration(roomId, joined, editorRef);
 
   const handleJoin = () => {
@@ -20,7 +22,7 @@ export default function CodeEditor() {
   };
 
   const handleEditorOnMount: OnMount = (editor) => {
-    editorRef.current = editor;
+    editorRef.current = editor; //useRef hold the editor object
 
     let lastEmit = 0;
     editor.onDidChangeCursorPosition((e) => {
@@ -31,7 +33,24 @@ export default function CodeEditor() {
       }
     });
 
-    socket.emit("join_room", roomId);
+    let lastSelEmit = 0;
+    editor.onDidChangeCursorSelection((e) => {
+      const now = Date.now();
+      if (now - lastSelEmit > 50) {
+        socket.emit("selection_change", {
+          roomId,
+          selection: {
+            startLineNumber: e.selection.startLineNumber,
+            startColumn: e.selection.startColumn,
+            endLineNumber: e.selection.endLineNumber,
+            endColumn: e.selection.endColumn,
+          },
+        });
+        lastSelEmit = now;
+      }
+    });
+
+    socket.emit("join_room", {roomId , user :user});
   };
 
   const handleEditorChange: OnChange = (_value, event) => {
@@ -57,6 +76,13 @@ export default function CodeEditor() {
           placeholder="Enter Room ID..."
           value={roomId}
           onChange={(e) => setRoomId(e.target.value)}
+          className="p-2.5 rounded-[5px] border-none w-62.5 text-black outline-none"
+        />
+        <input
+          type="text"
+          placeholder="Enter Your Name..."
+          value={user}
+          onChange={(e) => setUser(e.target.value)}
           className="p-2.5 rounded-[5px] border-none w-62.5 text-black outline-none"
         />
         <button
@@ -88,6 +114,7 @@ export default function CodeEditor() {
           fixedOverflowWidgets: true,
         }}
       />
+      <UsersSideBar />
     </div>
   );
 }

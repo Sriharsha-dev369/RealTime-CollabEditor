@@ -39,12 +39,13 @@ const userStates = new Map<
 io.on("connection", (socket) => {
   console.log(`User connected: ${socket.id}`);
 
-  socket.on("join_room", (roomId) => {
+  socket.on("join_room", (data) => {
+    const { roomId, user } = data;
     socket.join(roomId);
 
     const userData = {
       userId: socket.id,
-      name: `User-${socket.id.substring(0, 4)}`,
+      name: user,
       color: ["#ff4757", "#2ed573", "#1e90ff", "#ffa502", "#e056fd"][
         Math.floor(Math.random() * 5)
       ],
@@ -60,7 +61,20 @@ io.on("connection", (socket) => {
     socket.emit("init_code", roomStates.get(roomId));
 
     socket.to(roomId).emit("new_user_joined", userData);
+
+    const usersInRoom = Array.from(userStates.values())
+      .filter((u) => u.roomId === roomId)
+      .map((u) => u.name);
+
+    socket.emit("current_user_list", usersInRoom);
   });
+
+  //   socket.on("users_list", (roomId: string) => {
+  //   const usersInRoom = Array.from(userStates.values())
+  //     .filter(u => u.roomId === roomId);
+
+  //   io.to(roomId).emit("users_list", usersInRoom);
+  // });
 
   socket.on(
     "cursor_move",
@@ -73,6 +87,29 @@ io.on("connection", (socket) => {
         socket.to(data.roomId).emit("receive_cursor", {
           userId: socket.id,
           position: data.position,
+          color: user.color,
+          name: user.name,
+        });
+      }
+    },
+  );
+
+  socket.on(
+    "selection_change",
+    (data: {
+      roomId: string;
+      selection: {
+        startLineNumber: number;
+        startColumn: number;
+        endLineNumber: number;
+        endColumn: number;
+      };
+    }) => {
+      const user = userStates.get(socket.id);
+      if (user) {
+        socket.to(data.roomId).emit("receive_selection", {
+          userId: socket.id,
+          selection: data.selection,
           color: user.color,
           name: user.name,
         });

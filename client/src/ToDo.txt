@@ -1,0 +1,34 @@
+next feature : User List 
+
+-> frontend useState change for every new user (join_room),
+-> Backend stores Map (user data , room state) -> next if Files state and data. (send this for refresh , etc...)
+-> User status (is complex thing) => 1.Online and offline is easy (socketio)
+                                     2.editing (code_delta socket)
+                                     3.Reading (Later File system and Auth)
+
+
+-> Also setup Name in Cursor
+
+
+
+
+
+
+
+
+1.The onl mistake You have done is 
+
+  a. Not knowing about the Feature (flow , what are needed(real time , Id , granulas , useEffect or other , useState or useRef , is user involved or not (userId) , [first principle] etc... Stuff like that )) then decide code.
+
+        As you have done in Previous projects.
+        Instead you gave feature and told to Build
+
+
+        After Building Your minimal code Own : Optimize and clean With AntiGravity (not web LLM's XXXXXXX(worst way to code also understand CodeBase))
+
+
+        -> web LLM's are only for Teaching
+
+    
+
+Next : Feature 1 => 1.Code Block Sync (Indepth research of feature)
