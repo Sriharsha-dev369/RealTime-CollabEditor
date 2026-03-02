@@ -46,7 +46,7 @@ io.on("connection", (socket) => {
     const userData = {
       userId: socket.id,
       name: user,
-      color: ["#ff4757", "#2ed573", "#1e90ff", "#ffa502", "#e056fd"][
+      color: ["#4ade80", "#60a5fa", "#f472b6", "#a78bfa", "#34d399","#fb923c"][
         Math.floor(Math.random() * 5)
       ],
       roomId: roomId,
@@ -63,18 +63,10 @@ io.on("connection", (socket) => {
     socket.to(roomId).emit("new_user_joined", userData);
 
     const usersInRoom = Array.from(userStates.values())
-      .filter((u) => u.roomId === roomId)
-      .map((u) => u.name);
+      .filter((u) => u.roomId === roomId);
 
     socket.emit("current_user_list", usersInRoom);
   });
-
-  //   socket.on("users_list", (roomId: string) => {
-  //   const usersInRoom = Array.from(userStates.values())
-  //     .filter(u => u.roomId === roomId);
-
-  //   io.to(roomId).emit("users_list", usersInRoom);
-  // });
 
   socket.on(
     "cursor_move",
@@ -89,6 +81,10 @@ io.on("connection", (socket) => {
           position: data.position,
           color: user.color,
           name: user.name,
+        });
+        socket.to(data.roomId).emit("user_status_change", {
+          userId: socket.id,
+          status: "viewing",
         });
       }
     },
@@ -113,6 +109,10 @@ io.on("connection", (socket) => {
           color: user.color,
           name: user.name,
         });
+        socket.to(data.roomId).emit("user_status_change", {
+          userId: socket.id,
+          status: "viewing",
+        });
       }
     },
   );
@@ -124,6 +124,12 @@ io.on("connection", (socket) => {
 
     roomStates.set(roomId, updatedCode);
     socket.to(roomId).emit("receive_delta", { changes });
+
+    // Broadcast editing status to room
+    socket.to(roomId).emit("user_status_change", {
+      userId: socket.id,
+      status: "editing",
+    });
   });
 
   socket.on("request_full_sync", (roomId) => {

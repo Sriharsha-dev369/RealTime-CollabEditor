@@ -8,21 +8,22 @@ import { UsersSideBar } from "./UserSideBar";
 export default function CodeEditor() {
   const [roomId, setRoomId] = useState("");
   const [joined, setJoined] = useState(false);
-  const [user,setUser] = useState("");
+  const [user, setUser] = useState("");
 
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
-
   const { isRemoteChange } = useCollaboration(roomId, joined, editorRef);
 
+  const canJoin = roomId.trim() && user.trim();
+
   const handleJoin = () => {
-    if (roomId.trim()) {
+    if (canJoin) {
       socket.connect();
       setJoined(true);
     }
   };
 
   const handleEditorOnMount: OnMount = (editor) => {
-    editorRef.current = editor; //useRef hold the editor object
+    editorRef.current = editor;
 
     let lastEmit = 0;
     editor.onDidChangeCursorPosition((e) => {
@@ -50,12 +51,11 @@ export default function CodeEditor() {
       }
     });
 
-    socket.emit("join_room", {roomId , user :user});
+    socket.emit("join_room", { roomId, user });
   };
 
   const handleEditorChange: OnChange = (_value, event) => {
     if (isRemoteChange.current || !event.changes) return;
-
     socket.emit("code_delta", {
       roomId,
       changes: event.changes.map((c) => ({
@@ -67,54 +67,116 @@ export default function CodeEditor() {
     });
   };
 
+  monaco.editor.defineTheme("collab-dark", {
+    base: "vs-dark",
+    inherit: true,
+    rules: [],
+    colors: { "editor.background": "#0a0a0c" },
+  });
+
+  /* ── Join Room ── */
   if (!joined) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-[#1e1e1e] text-white gap-5">
-        <h1>Collaborative Editor</h1>
-        <input
-          type="text"
-          placeholder="Enter Room ID..."
-          value={roomId}
-          onChange={(e) => setRoomId(e.target.value)}
-          className="p-2.5 rounded-[5px] border-none w-62.5 text-black outline-none"
-        />
-        <input
-          type="text"
-          placeholder="Enter Your Name..."
-          value={user}
-          onChange={(e) => setUser(e.target.value)}
-          className="p-2.5 rounded-[5px] border-none w-62.5 text-black outline-none"
-        />
-        <button
-          onClick={handleJoin}
-          className="px-5 py-2.5 cursor-pointer bg-[#007acc] text-white border-none rounded-[5px] hover:bg-[#005f9e] transition-colors"
-        >
-          Join Room
-        </button>
+      <div className="flex items-center justify-center h-screen bg-[#08080a] font-sans">
+        <div className="w-[380px] p-10 rounded-2xl bg-[#111114] border border-[#1e1e26]">
+
+          {/* Logo */}
+          <div className="text-center mb-8">
+            <div className="w-10 h-10 mx-auto mb-4 rounded-[10px] bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-white text-lg font-bold">
+              {"<>"}
+            </div>
+            <h1 className="text-xl font-semibold text-zinc-200 tracking-tight">
+              CollabEdit
+            </h1>
+            <p className="text-[13px] text-zinc-600 mt-1.5">
+              Real-time collaborative code editor
+            </p>
+          </div>
+
+          {/* Inputs */}
+          <div className="flex flex-col gap-3">
+            <div>
+              <label className="block text-xs font-medium text-zinc-500 mb-1.5 tracking-wider">
+                ROOM ID
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. project-alpha"
+                value={roomId}
+                onChange={(e) => setRoomId(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-lg border border-zinc-800 bg-[#0a0a0c] text-zinc-200 text-sm outline-none transition-colors focus:border-zinc-600 placeholder:text-zinc-700"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-500 mb-1.5 tracking-wider">
+                YOUR NAME
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Alex"
+                value={user}
+                onChange={(e) => setUser(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-lg border border-zinc-800 bg-[#0a0a0c] text-zinc-200 text-sm outline-none transition-colors focus:border-zinc-600 placeholder:text-zinc-700"
+              />
+            </div>
+          </div>
+
+          {/* Button */}
+          <button
+            onClick={handleJoin}
+            disabled={!canJoin}
+            className={`w-full mt-5 py-2.5 rounded-lg border-none text-sm font-semibold transition-opacity ${canJoin
+              ? "bg-gradient-to-br from-indigo-500 to-violet-500 text-white cursor-pointer hover:opacity-90"
+              : "bg-zinc-800 text-zinc-600 cursor-not-allowed"
+              }`}
+          >
+            Join Room
+          </button>
+        </div>
       </div>
     );
   }
 
+  /* ── Editor ── */
   return (
-    <div className="flex flex-col h-screen bg-[#1e1e1e]">
-      <header className="p-2.5 bg-[#333] text-white text-[14px] flex justify-between items-center">
-        <span>Monaco Collaborative Session</span>
-        <span className="text-xs opacity-50">Room: {roomId}</span>
+    <div className="flex flex-col h-screen bg-[#0a0a0c] font-sans">
+
+      {/* Header */}
+      <header className="flex justify-between items-center px-4 h-10 border-b border-[#1a1a1f] bg-[#0e0e12] shrink-0">
+        <div className="flex items-center gap-2.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-400 shadow-[0_0_8px_#4ade8066]" />
+          <span className="text-[13px] font-medium text-zinc-400 tracking-tight">
+            CollabEdit
+          </span>
+        </div>
+        <span className="text-[11px] text-zinc-600 bg-[#18181b] px-2.5 py-0.5 rounded-md border border-zinc-800 font-mono">
+          {roomId}
+        </span>
       </header>
-      <Editor
-        className="flex-1 overflow-hidden"
-        defaultLanguage="typescript"
-        theme="vs-dark"
-        onMount={handleEditorOnMount}
-        onChange={handleEditorChange}
-        options={{
-          automaticLayout: true,
-          minimap: { enabled: false },
-          scrollBeyondLastLine: false,
-          fixedOverflowWidgets: true,
-        }}
-      />
-      <UsersSideBar />
+
+      {/* Editor + Sidebar */}
+      <div className="flex flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden">
+          <Editor
+            width="100%"
+            height="100%"
+            defaultLanguage="typescript"
+            theme="vs-dark"
+            onMount={handleEditorOnMount}
+            onChange={handleEditorChange}
+            options={{
+              automaticLayout: true,
+              minimap: { enabled: false },
+              scrollBeyondLastLine: false,
+              fixedOverflowWidgets: true,
+              fontSize: 14,
+              lineHeight: 22,
+              padding: { top: 12 },
+            }}
+          />
+        </div>
+        <UsersSideBar />
+      </div>
     </div>
   );
 }

@@ -24,5 +24,7 @@ export interface RemoteSelectionData {
 export interface UserData {
   userId: string;
   name: string;
-  roomId: string;
+  color: string;
+  roomId?: string;
+  status?: "editing" | "viewing" | "idle";
 }
