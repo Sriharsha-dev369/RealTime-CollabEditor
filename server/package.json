@@ -19,6 +19,7 @@
     "exec": "tsx src/index.ts"
   },
   "dependencies": {
+    "cors": "^2.8.6",
     "express": "^5.2.1",
     "nodemon": "^3.1.13",
     "socket.io": "^4.8.3"

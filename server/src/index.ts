@@ -7,9 +7,12 @@ const app = express();
 app.use(cors());
 
 const server = createServer(app);
+const PORT = process.env.PORT || 3000;
+const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:5173";
+
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173",
+    origin: CLIENT_ORIGIN,
     methods: ["GET", "POST"],
   },
 });
@@ -30,24 +33,26 @@ function applyChanges(oldCode: string, changes: any[]): string {
   return newCode;
 }
 
-const roomStates = new Map<string, string>();
+const roomStates = new Map<string, string>(); // roomId -> current code
 const userStates = new Map<
   string,
   { userId: string; name: string; color: string; roomId: string }
->();
+>(); // socketId -> user data
+
+//Socketio manages Room <-> socket(so when you emit with roomid , it will know which socketid to send based on roomid) and we are managing roomId <-> code and socketId <-> user data
 
 io.on("connection", (socket) => {
   console.log(`User connected: ${socket.id}`);
 
   socket.on("join_room", (data) => {
     const { roomId, user } = data;
-    socket.join(roomId);
+    socket.join(roomId); //socket io is mangaing Room internnaly (room <-> scoket)
 
     const userData = {
       userId: socket.id,
       name: user,
-      color: ["#4ade80", "#60a5fa", "#f472b6", "#a78bfa", "#34d399","#fb923c"][
-        Math.floor(Math.random() * 5)
+      color: ["#4ade80", "#60a5fa", "#f472b6", "#a78bfa", "#34d399", "#fb923c"][
+        Math.floor(Math.random() * 6)
       ],
       roomId: roomId,
     };
@@ -62,38 +67,37 @@ io.on("connection", (socket) => {
 
     socket.to(roomId).emit("new_user_joined", userData);
 
-    const usersInRoom = Array.from(userStates.values())
-      .filter((u) => u.roomId === roomId);
+    const usersInRoom = Array.from(userStates.values()).filter(
+      (u) => u.roomId === roomId,
+    );
 
     socket.emit("current_user_list", usersInRoom);
   });
 
   socket.on(
     "cursor_move",
-    (data: {
-      roomId: string;
-      position: { lineNumber: number; column: number };
-    }) => {
+    (data: { position: { lineNumber: number; column: number } }) => {
       const user = userStates.get(socket.id);
-      if (user) {
-        socket.to(data.roomId).emit("receive_cursor", {
-          userId: socket.id,
-          position: data.position,
-          color: user.color,
-          name: user.name,
-        });
-        socket.to(data.roomId).emit("user_status_change", {
-          userId: socket.id,
-          status: "viewing",
-        });
+      if (!user) {
+        console.error(`User not found for socket ${socket.id}`);
+        return;
       }
+      socket.to(user.roomId).emit("receive_cursor", {
+        userId: socket.id,
+        position: data.position,
+        color: user.color,
+        name: user.name,
+      });
+      socket.to(user.roomId).emit("user_status_change", {
+        userId: socket.id,
+        status: "viewing",
+      });
     },
   );
 
   socket.on(
     "selection_change",
     (data: {
-      roomId: string;
       selection: {
         startLineNumber: number;
         startColumn: number;
@@ -102,33 +106,38 @@ io.on("connection", (socket) => {
       };
     }) => {
       const user = userStates.get(socket.id);
-      if (user) {
-        socket.to(data.roomId).emit("receive_selection", {
-          userId: socket.id,
-          selection: data.selection,
-          color: user.color,
-          name: user.name,
-        });
-        socket.to(data.roomId).emit("user_status_change", {
-          userId: socket.id,
-          status: "viewing",
-        });
+      if (!user) {
+        console.error(`User not found for socket ${socket.id}`);
+        return;
       }
+      socket.to(user.roomId).emit("receive_selection", {
+        userId: socket.id,
+        selection: data.selection,
+        color: user.color,
+        name: user.name,
+      });
+      socket.to(user.roomId).emit("user_status_change", {
+        userId: socket.id,
+        status: "viewing",
+      });
     },
   );
 
   socket.on("code_delta", (data) => {
-    const { roomId, changes } = data;
-    const currentCode = roomStates.get(roomId) || "";
+    const user = userStates.get(socket.id);
+    if (!user) {
+      console.error(`User not found for socket ${socket.id}`);
+      return;
+    }
+    const { changes } = data;
+    const currentCode = roomStates.get(user.roomId) || "";
     const updatedCode = applyChanges(currentCode, changes);
 
-    roomStates.set(roomId, updatedCode);
-    socket.to(roomId).emit("receive_delta", { changes });
+    roomStates.set(user.roomId, updatedCode);
+    socket.to(user.roomId).emit("receive_delta", { changes });
 
-    // Broadcast editing status to room
-    socket.to(roomId).emit("user_status_change", {
+    socket.to(user.roomId).emit("user_status_change", {
       userId: socket.id,
-      status: "editing",
     });
   });
 
@@ -152,7 +161,6 @@ io.on("connection", (socket) => {
   });
 });
 
-const PORT = 3000;
 server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });

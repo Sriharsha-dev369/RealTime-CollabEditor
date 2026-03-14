@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Editor, { type OnMount, type OnChange } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
 import { socket } from "../socket";
@@ -11,6 +11,7 @@ export default function CodeEditor() {
   const [user, setUser] = useState("");
 
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const disposablesRef = useRef<Array<{ dispose: () => void }>>([]);
   const { isRemoteChange } = useCollaboration(roomId, joined, editorRef);
 
   const canJoin = roomId.trim() && user.trim();
@@ -24,40 +25,52 @@ export default function CodeEditor() {
 
   const handleEditorOnMount: OnMount = (editor) => {
     editorRef.current = editor;
-
-    let lastEmit = 0;
-    editor.onDidChangeCursorPosition((e) => {
-      const now = Date.now();
-      if (now - lastEmit > 50) {
-        socket.emit("cursor_move", { roomId, position: e.position });
-        lastEmit = now;
-      }
-    });
-
-    let lastSelEmit = 0;
-    editor.onDidChangeCursorSelection((e) => {
-      const now = Date.now();
-      if (now - lastSelEmit > 50) {
-        socket.emit("selection_change", {
-          roomId,
-          selection: {
-            startLineNumber: e.selection.startLineNumber,
-            startColumn: e.selection.startColumn,
-            endLineNumber: e.selection.endLineNumber,
-            endColumn: e.selection.endColumn,
-          },
-        });
-        lastSelEmit = now;
-      }
-    });
-
     socket.emit("join_room", { roomId, user });
   };
+
+  useEffect(() => {
+    if (!editorRef.current) return;
+
+    let lastEmit = 0;
+    const cursorDisposable = editorRef.current.onDidChangeCursorPosition(
+      (e) => {
+        const now = Date.now();
+        if (now - lastEmit > 50) {
+          socket.emit("cursor_move", { position: e.position });
+          lastEmit = now;
+        }
+      },
+    );
+    disposablesRef.current.push(cursorDisposable);
+
+    let lastSelEmit = 0;
+    const selectionDisposable = editorRef.current.onDidChangeCursorSelection(
+      (e) => {
+        const now = Date.now();
+        if (now - lastSelEmit > 50) {
+          socket.emit("selection_change", {
+            selection: {
+              startLineNumber: e.selection.startLineNumber,
+              startColumn: e.selection.startColumn,
+              endLineNumber: e.selection.endLineNumber,
+              endColumn: e.selection.endColumn,
+            },
+          });
+          lastSelEmit = now;
+        }
+      },
+    );
+    disposablesRef.current.push(selectionDisposable);
+
+    return () => {
+      disposablesRef.current.forEach((d) => d.dispose());
+      disposablesRef.current = [];
+    };
+  }, [roomId]);
 
   const handleEditorChange: OnChange = (_value, event) => {
     if (isRemoteChange.current || !event.changes) return;
     socket.emit("code_delta", {
-      roomId,
       changes: event.changes.map((c) => ({
         range: c.range,
         text: c.text,
@@ -74,12 +87,10 @@ export default function CodeEditor() {
     colors: { "editor.background": "#0a0a0c" },
   });
 
-  /* ── Join Room ── */
   if (!joined) {
     return (
       <div className="flex items-center justify-center h-screen bg-[#08080a] font-sans">
         <div className="w-[380px] p-10 rounded-2xl bg-[#111114] border border-[#1e1e26]">
-
           {/* Logo */}
           <div className="text-center mb-8">
             <div className="w-10 h-10 mx-auto mb-4 rounded-[10px] bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-white text-lg font-bold">
@@ -125,10 +136,11 @@ export default function CodeEditor() {
           <button
             onClick={handleJoin}
             disabled={!canJoin}
-            className={`w-full mt-5 py-2.5 rounded-lg border-none text-sm font-semibold transition-opacity ${canJoin
-              ? "bg-gradient-to-br from-indigo-500 to-violet-500 text-white cursor-pointer hover:opacity-90"
-              : "bg-zinc-800 text-zinc-600 cursor-not-allowed"
-              }`}
+            className={`w-full mt-5 py-2.5 rounded-lg border-none text-sm font-semibold transition-opacity ${
+              canJoin
+                ? "bg-gradient-to-br from-indigo-500 to-violet-500 text-white cursor-pointer hover:opacity-90"
+                : "bg-zinc-800 text-zinc-600 cursor-not-allowed"
+            }`}
           >
             Join Room
           </button>
@@ -140,7 +152,6 @@ export default function CodeEditor() {
   /* ── Editor ── */
   return (
     <div className="flex flex-col h-screen bg-[#0a0a0c] font-sans">
-
       {/* Header */}
       <header className="flex justify-between items-center px-4 h-10 border-b border-[#1a1a1f] bg-[#0e0e12] shrink-0">
         <div className="flex items-center gap-2.5">

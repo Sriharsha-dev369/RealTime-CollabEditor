@@ -78,14 +78,16 @@ export const useUsersList = () => {
     socket.on("user_left", handleUserLeft);
     socket.on("user_status_change", handleStatusChange);
 
+    const timers = idleTimers.current;
+
     return () => {
       socket.off("current_user_list", handleInitialList);
       socket.off("new_user_joined", handleNewUser);
       socket.off("user_left", handleUserLeft);
       socket.off("user_status_change", handleStatusChange);
 
-      idleTimers.current.forEach((t) => clearTimeout(t));
-      idleTimers.current.clear();
+      timers.forEach((t) => clearTimeout(t));
+      timers.clear();
     };
   }, []);
 

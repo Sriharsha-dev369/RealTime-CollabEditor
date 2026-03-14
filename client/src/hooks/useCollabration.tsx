@@ -44,7 +44,6 @@ export const useCollaboration = (
       }
       if (editorRef.current) {
         socket.emit("cursor_move", {
-          roomId,
           position: editorRef.current.getPosition(),
         });
       }
@@ -59,7 +58,6 @@ export const useCollaboration = (
     socket.on("user_left", removeCursor);
     socket.on("new_user_joined", handleNewUserJoined);
     socket.on("connect", requestSync);
-    // socket.on("users_list",usersList);
 
     return () => {
       socket.off("init_code", handleInitCode);
@@ -69,8 +67,6 @@ export const useCollaboration = (
       socket.off("user_left", removeCursor);
       socket.off("new_user_joined", handleNewUserJoined);
       socket.off("connect", requestSync);
-      // socket.off("users_list",usersList);
-      socket.disconnect();
     };
   }, [
     joined,

@@ -7,8 +7,7 @@ import type {
 
 const safeId = (id: string) => `u${id.replace(/[^a-zA-Z0-9]/g, "")}`;
 
-const injectStyle = (userId: string, color: string, name: string) => {
-  const id = safeId(userId);
+const injectStyle = (id: string, color: string, name: string) => {
   const styleId = `monaco-cursor-${id}`;
   if (document.getElementById(styleId)) return;
 
@@ -40,8 +39,8 @@ const injectStyle = (userId: string, color: string, name: string) => {
   document.head.appendChild(el);
 };
 
-const removeStyle = (userId: string) =>
-  document.getElementById(`monaco-cursor-${safeId(userId)}`)?.remove();
+const removeStyle = (id: string) =>
+  document.getElementById(`monaco-cursor-${id}`)?.remove();
 
 export const useRemoteCursors = (
   editorRef: React.MutableRefObject<monaco.editor.IStandaloneCodeEditor | null>,
@@ -106,7 +105,7 @@ export const useRemoteCursors = (
       if (!editor) return;
 
       const id = safeId(data.userId);
-      injectStyle(data.userId, data.color, data.name);
+      injectStyle(id, data.color, data.name);
 
       const collection = getOrCreateCollection(
         data.userId,
@@ -117,7 +116,7 @@ export const useRemoteCursors = (
         data.selection;
 
       if (startLineNumber === endLineNumber && startColumn === endColumn) {
-        collection.set([]); 
+        collection.set([]);
         return;
       }
 
@@ -142,13 +141,14 @@ export const useRemoteCursors = (
   );
 
   const removeCursor = useCallback((userId: string) => {
+    const id = safeId(userId);
     cursorCollections.current.get(userId)?.clear();
     cursorCollections.current.delete(userId);
 
     selectionCollections.current.get(userId)?.clear();
     selectionCollections.current.delete(userId);
 
-    removeStyle(userId);
+    removeStyle(id);
   }, []);
 
   useEffect(() => {
@@ -156,8 +156,10 @@ export const useRemoteCursors = (
     const currentSelections = selectionCollections.current;
 
     return () => {
-      currentCursors.forEach((collection) => {
+      currentCursors.forEach((collection, userId) => {
+        const id = safeId(userId);
         collection.clear();
+        removeStyle(id);
       });
       currentCursors.clear();
 
@@ -172,6 +174,7 @@ export const useRemoteCursors = (
     applyCursor,
     applySelection,
     removeCursor,
-    injectUserStyle: injectStyle,
+    injectUserStyle: (userId: string, color: string, name: string) =>
+      injectStyle(safeId(userId), color, name),
   };
 };
