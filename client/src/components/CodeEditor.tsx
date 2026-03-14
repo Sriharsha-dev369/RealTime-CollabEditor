@@ -9,75 +9,130 @@ export default function CodeEditor() {
   const [roomId, setRoomId] = useState("");
   const [joined, setJoined] = useState(false);
   const [user, setUser] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
 
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const disposablesRef = useRef<Array<{ dispose: () => void }>>([]);
-  const { isRemoteChange } = useCollaboration(roomId, joined, editorRef);
+  const { isRemoteChange } = useCollaboration(
+    roomId,
+    joined,
+    editorRef,
+    setError,
+  );
 
   const canJoin = roomId.trim() && user.trim();
 
   const handleJoin = () => {
-    if (canJoin) {
+    if (!canJoin) return;
+
+    setError(null);
+    setIsConnecting(true);
+
+    try {
       socket.connect();
       setJoined(true);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to connect";
+      setError(message);
+      setIsConnecting(false);
+      console.error("Join error:", err);
     }
   };
 
   const handleEditorOnMount: OnMount = (editor) => {
-    editorRef.current = editor;
-    socket.emit("join_room", { roomId, user });
+    try {
+      editorRef.current = editor;
+      socket.emit("join_room", { roomId, user }, (ack: { error?: string }) => {
+        if (ack?.error) {
+          setError(ack.error);
+          setJoined(false);
+          setIsConnecting(false);
+        } else {
+          setIsConnecting(false);
+        }
+      });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to join room";
+      setError(message);
+      setJoined(false);
+      setIsConnecting(false);
+      console.error("Mount error:", err);
+    }
   };
 
   useEffect(() => {
     if (!editorRef.current) return;
 
-    let lastEmit = 0;
-    const cursorDisposable = editorRef.current.onDidChangeCursorPosition(
-      (e) => {
-        const now = Date.now();
-        if (now - lastEmit > 50) {
-          socket.emit("cursor_move", { position: e.position });
-          lastEmit = now;
-        }
-      },
-    );
-    disposablesRef.current.push(cursorDisposable);
+    try {
+      let lastEmit = 0;
+      const cursorDisposable = editorRef.current.onDidChangeCursorPosition(
+        (e) => {
+          try {
+            const now = Date.now();
+            if (now - lastEmit > 50) {
+              socket.emit("cursor_move", { position: e.position });
+              lastEmit = now;
+            }
+          } catch (err) {
+            console.error("Error emitting cursor_move:", err);
+          }
+        },
+      );
+      disposablesRef.current.push(cursorDisposable);
 
-    let lastSelEmit = 0;
-    const selectionDisposable = editorRef.current.onDidChangeCursorSelection(
-      (e) => {
-        const now = Date.now();
-        if (now - lastSelEmit > 50) {
-          socket.emit("selection_change", {
-            selection: {
-              startLineNumber: e.selection.startLineNumber,
-              startColumn: e.selection.startColumn,
-              endLineNumber: e.selection.endLineNumber,
-              endColumn: e.selection.endColumn,
-            },
-          });
-          lastSelEmit = now;
-        }
-      },
-    );
-    disposablesRef.current.push(selectionDisposable);
+      let lastSelEmit = 0;
+      const selectionDisposable = editorRef.current.onDidChangeCursorSelection(
+        (e) => {
+          try {
+            const now = Date.now();
+            if (now - lastSelEmit > 50) {
+              socket.emit("selection_change", {
+                selection: {
+                  startLineNumber: e.selection.startLineNumber,
+                  startColumn: e.selection.startColumn,
+                  endLineNumber: e.selection.endLineNumber,
+                  endColumn: e.selection.endColumn,
+                },
+              });
+              lastSelEmit = now;
+            }
+          } catch (err) {
+            console.error("Error emitting selection_change:", err);
+          }
+        },
+      );
+      disposablesRef.current.push(selectionDisposable);
 
-    return () => {
-      disposablesRef.current.forEach((d) => d.dispose());
-      disposablesRef.current = [];
-    };
+      return () => {
+        disposablesRef.current.forEach((d) => d.dispose());
+        disposablesRef.current = [];
+      };
+    } catch (err) {
+      console.error("Error setting up editor listeners:", err);
+    }
   }, [roomId]);
 
   const handleEditorChange: OnChange = (_value, event) => {
-    if (isRemoteChange.current || !event.changes) return;
-    socket.emit("code_delta", {
-      changes: event.changes.map((c) => ({
-        range: c.range,
-        text: c.text,
-        rangeOffset: c.rangeOffset,
-        rangeLength: c.rangeLength,
-      })),
-    });
+    try {
+      if (
+        isRemoteChange.current ||
+        !event.changes ||
+        event.changes.length === 0
+      )
+        return;
+      socket.emit("code_delta", {
+        changes: event.changes.map((c) => ({
+          range: c.range,
+          text: c.text,
+          rangeOffset: c.rangeOffset,
+          rangeLength: c.rangeLength,
+        })),
+      });
+    } catch (err) {
+      console.error("Error emitting code_delta:", err);
+    }
   };
 
   monaco.editor.defineTheme("collab-dark", {
@@ -132,17 +187,24 @@ export default function CodeEditor() {
             </div>
           </div>
 
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+              {error}
+            </div>
+          )}
+
           {/* Button */}
           <button
             onClick={handleJoin}
-            disabled={!canJoin}
+            disabled={!canJoin || isConnecting}
             className={`w-full mt-5 py-2.5 rounded-lg border-none text-sm font-semibold transition-opacity ${
-              canJoin
+              canJoin && !isConnecting
                 ? "bg-gradient-to-br from-indigo-500 to-violet-500 text-white cursor-pointer hover:opacity-90"
                 : "bg-zinc-800 text-zinc-600 cursor-not-allowed"
             }`}
           >
-            Join Room
+            {isConnecting ? "Connecting..." : "Join Room"}
           </button>
         </div>
       </div>
