@@ -3,7 +3,10 @@ import { createServer } from "node:http";
 import { Server } from "socket.io";
 import cors from "cors";
 import { PORT, CLIENT_ORIGIN } from "./config.js";
-import { registerSocketHandlers } from "./handlers/socketHandlers.js";
+import { registerRoomHandler } from "./socket/handlers/roomHandler.js";
+import { registerFileHandler } from "./socket/handlers/fileHandler.js";
+import { registerPresenceHandler } from "./socket/handlers/presenceHandler.js";
+import { registerDisconnectHandler } from "./socket/handlers/disconnectHandler.js";
 
 const app = express();
 app.use(cors());
@@ -18,7 +21,10 @@ const io = new Server(server, {
 });
 
 io.on("connection", (socket) => {
-  registerSocketHandlers(io, socket);
+  registerRoomHandler(io, socket);
+  registerFileHandler(io, socket);
+  registerPresenceHandler(io, socket);
+  registerDisconnectHandler(io, socket);
 });
 
 server.on("error", (error) => {

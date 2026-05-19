@@ -1,7 +1,7 @@
-// useUsersList.ts
 import { useState, useEffect, useRef } from "react";
 import { socket } from "../socket";
-import type { UserData } from "../types/collabration";
+import { SERVER_EVENTS } from "../socket/events";
+import type { UserData, RoomJoinedPayload } from "../types/collabration";
 
 export const useUsersList = () => {
   const [users, setUsers] = useState<UserData[]>([]);
@@ -10,9 +10,9 @@ export const useUsersList = () => {
   );
 
   useEffect(() => {
-    const handleInitialList = (list: UserData[]) => {
+    const handleRoomJoined = (data: RoomJoinedPayload) => {
       setUsers(
-        list.map((u) => ({
+        data.users.map((u) => ({
           userId: u.userId,
           name: u.name,
           color: u.color,
@@ -36,7 +36,7 @@ export const useUsersList = () => {
       });
     };
 
-    const handleUserLeft = (userId: string) => {
+    const handleUserLeft = ({ userId }: { userId: string }) => {
       setUsers((prev) => prev.filter((u) => u.userId !== userId));
       const timer = idleTimers.current.get(userId);
       if (timer) {
@@ -45,46 +45,16 @@ export const useUsersList = () => {
       }
     };
 
-    const handleStatusChange = (data: { userId: string; status: string }) => {
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.userId === data.userId
-            ? { ...u, status: data.status as UserData["status"] }
-            : u,
-        ),
-      );
-
-      if (data.status === "editing" || data.status === "viewing") {
-        const existing = idleTimers.current.get(data.userId);
-        if (existing) clearTimeout(existing);
-
-        const delay = data.status === "editing" ? 3000 : 5000;
-        idleTimers.current.set(
-          data.userId,
-          setTimeout(() => {
-            setUsers((prev) =>
-              prev.map((u) =>
-                u.userId === data.userId ? { ...u, status: "idle" } : u,
-              ),
-            );
-            idleTimers.current.delete(data.userId);
-          }, delay),
-        );
-      }
-    };
-
-    socket.on("current_user_list", handleInitialList);
-    socket.on("new_user_joined", handleNewUser);
-    socket.on("user_left", handleUserLeft);
-    socket.on("user_status_change", handleStatusChange);
+    socket.on(SERVER_EVENTS.ROOM_JOINED, handleRoomJoined);
+    socket.on(SERVER_EVENTS.USER_JOINED, handleNewUser);
+    socket.on(SERVER_EVENTS.USER_LEFT, handleUserLeft);
 
     const timers = idleTimers.current;
 
     return () => {
-      socket.off("current_user_list", handleInitialList);
-      socket.off("new_user_joined", handleNewUser);
-      socket.off("user_left", handleUserLeft);
-      socket.off("user_status_change", handleStatusChange);
+      socket.off(SERVER_EVENTS.ROOM_JOINED, handleRoomJoined);
+      socket.off(SERVER_EVENTS.USER_JOINED, handleNewUser);
+      socket.off(SERVER_EVENTS.USER_LEFT, handleUserLeft);
 
       timers.forEach((t) => clearTimeout(t));
       timers.clear();

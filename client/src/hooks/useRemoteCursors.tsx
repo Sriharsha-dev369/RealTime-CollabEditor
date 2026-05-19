@@ -71,7 +71,7 @@ export const useRemoteCursors = (
       if (!editor) return;
 
       const id = safeId(data.userId);
-      injectStyle(data.userId, data.color, data.name);
+      injectStyle(id, data.color, data.name);
 
       const collection = getOrCreateCollection(
         data.userId,
@@ -82,10 +82,10 @@ export const useRemoteCursors = (
       collection.set([
         {
           range: new monaco.Range(
-            data.position.lineNumber,
-            data.position.column,
-            data.position.lineNumber,
-            data.position.column,
+            data.line,
+            data.col,
+            data.line,
+            data.col,
           ),
           options: {
             className: `remote-cursor cursor-${id}`,

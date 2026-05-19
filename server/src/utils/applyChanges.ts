@@ -17,7 +17,7 @@ export function applyChanges(oldCode: string, changes: any[]): string {
         typeof change.text !== "string"
       ) {
         console.error("Invalid change object:", change);
-        continue;
+        return oldCode;
       }
 
       const { rangeOffset, rangeLength, text } = change;
@@ -25,7 +25,7 @@ export function applyChanges(oldCode: string, changes: any[]): string {
         console.error(
           `Invalid rangeOffset: ${rangeOffset}, code length: ${newCode.length}`,
         );
-        continue;
+        return oldCode;
       }
 
       newCode =

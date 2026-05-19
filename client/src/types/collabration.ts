@@ -9,7 +9,8 @@ export interface MonacoChange {
 
 export interface RemoteCursorData {
   userId: string;
-  position: monaco.IPosition;
+  line: number;
+  col: number;
   color: string;
   name: string;
 }
@@ -27,4 +28,29 @@ export interface UserData {
   color: string;
   roomId?: string;
   status?: "editing" | "viewing" | "idle";
+}
+
+export interface EditorFile {
+  id: string;
+  name: string;
+  content: string;
+  language: string;
+}
+
+export interface RoomJoinedPayload {
+  roomId: string;
+  userId: string;
+  name: string;
+  color: string;
+  activeFileId?: string;
+  files: EditorFile[];
+  users: { userId: string; name: string; color: string }[];
+}
+
+export interface RoomCreatedPayload {
+  roomId: string;
+  userId: string;
+  name: string;
+  color: string;
+  files: EditorFile[];
 }

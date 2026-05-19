@@ -1,34 +1,21 @@
-import { useState, useRef, useEffect } from "react";
-import Editor, { type OnMount, type OnChange } from "@monaco-editor/react";
-import * as monaco from "monaco-editor";
+import { useState } from "react";
 import { socket } from "../socket";
-import { useCollaboration } from "../hooks/useCollabration";
-import { UsersSideBar } from "./UserSideBar";
+import HomePage from "../pages/HomePage";
+import EditorPage from "../pages/EditorPage";
 
 export default function CodeEditor() {
-  const [roomId, setRoomId] = useState("");
   const [joined, setJoined] = useState(false);
-  const [user, setUser] = useState("");
+  const [roomId, setRoomId] = useState("");
+  const [name, setName] = useState("");
+  const [userId] = useState(() => crypto.randomUUID());
   const [error, setError] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
 
-  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
-  const disposablesRef = useRef<Array<{ dispose: () => void }>>([]);
-  const { isRemoteChange } = useCollaboration(
-    roomId,
-    joined,
-    editorRef,
-    setError,
-  );
-
-  const canJoin = roomId.trim() && user.trim();
-
-  const handleJoin = () => {
-    if (!canJoin) return;
-
+  const handleJoin = (incomingRoomId: string, incomingName: string) => {
     setError(null);
     setIsConnecting(true);
-
+    setRoomId(incomingRoomId);
+    setName(incomingName);
     try {
       socket.connect();
       setJoined(true);
@@ -36,220 +23,24 @@ export default function CodeEditor() {
       const message = err instanceof Error ? err.message : "Failed to connect";
       setError(message);
       setIsConnecting(false);
-      console.error("Join error:", err);
     }
   };
-
-  const handleEditorOnMount: OnMount = (editor) => {
-    try {
-      editorRef.current = editor;
-      socket.emit("join_room", { roomId, user }, (ack: { error?: string }) => {
-        if (ack?.error) {
-          setError(ack.error);
-          setJoined(false);
-          setIsConnecting(false);
-        } else {
-          setIsConnecting(false);
-        }
-      });
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to join room";
-      setError(message);
-      setJoined(false);
-      setIsConnecting(false);
-      console.error("Mount error:", err);
-    }
-  };
-
-  useEffect(() => {
-    if (!editorRef.current) return;
-
-    try {
-      let lastEmit = 0;
-      const cursorDisposable = editorRef.current.onDidChangeCursorPosition(
-        (e) => {
-          try {
-            const now = Date.now();
-            if (now - lastEmit > 50) {
-              socket.emit("cursor_move", { position: e.position });
-              lastEmit = now;
-            }
-          } catch (err) {
-            console.error("Error emitting cursor_move:", err);
-          }
-        },
-      );
-      disposablesRef.current.push(cursorDisposable);
-
-      let lastSelEmit = 0;
-      const selectionDisposable = editorRef.current.onDidChangeCursorSelection(
-        (e) => {
-          try {
-            const now = Date.now();
-            if (now - lastSelEmit > 50) {
-              socket.emit("selection_change", {
-                selection: {
-                  startLineNumber: e.selection.startLineNumber,
-                  startColumn: e.selection.startColumn,
-                  endLineNumber: e.selection.endLineNumber,
-                  endColumn: e.selection.endColumn,
-                },
-              });
-              lastSelEmit = now;
-            }
-          } catch (err) {
-            console.error("Error emitting selection_change:", err);
-          }
-        },
-      );
-      disposablesRef.current.push(selectionDisposable);
-
-      return () => {
-        disposablesRef.current.forEach((d) => d.dispose());
-        disposablesRef.current = [];
-      };
-    } catch (err) {
-      console.error("Error setting up editor listeners:", err);
-    }
-  }, [roomId]);
-
-  const handleEditorChange: OnChange = (_value, event) => {
-    try {
-      if (
-        isRemoteChange.current ||
-        !event.changes ||
-        event.changes.length === 0
-      )
-        return;
-      socket.emit("code_delta", {
-        changes: event.changes.map((c) => ({
-          range: c.range,
-          text: c.text,
-          rangeOffset: c.rangeOffset,
-          rangeLength: c.rangeLength,
-        })),
-      });
-    } catch (err) {
-      console.error("Error emitting code_delta:", err);
-    }
-  };
-
-  monaco.editor.defineTheme("collab-dark", {
-    base: "vs-dark",
-    inherit: true,
-    rules: [],
-    colors: { "editor.background": "#0a0a0c" },
-  });
 
   if (!joined) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[#08080a] font-sans">
-        <div className="w-[380px] p-10 rounded-2xl bg-[#111114] border border-[#1e1e26]">
-          {/* Logo */}
-          <div className="text-center mb-8">
-            <div className="w-10 h-10 mx-auto mb-4 rounded-[10px] bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-white text-lg font-bold">
-              {"<>"}
-            </div>
-            <h1 className="text-xl font-semibold text-zinc-200 tracking-tight">
-              CollabEdit
-            </h1>
-            <p className="text-[13px] text-zinc-600 mt-1.5">
-              Real-time collaborative code editor
-            </p>
-          </div>
-
-          {/* Inputs */}
-          <div className="flex flex-col gap-3">
-            <div>
-              <label className="block text-xs font-medium text-zinc-500 mb-1.5 tracking-wider">
-                ROOM ID
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. project-alpha"
-                value={roomId}
-                onChange={(e) => setRoomId(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-lg border border-zinc-800 bg-[#0a0a0c] text-zinc-200 text-sm outline-none transition-colors focus:border-zinc-600 placeholder:text-zinc-700"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-zinc-500 mb-1.5 tracking-wider">
-                YOUR NAME
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. Alex"
-                value={user}
-                onChange={(e) => setUser(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-lg border border-zinc-800 bg-[#0a0a0c] text-zinc-200 text-sm outline-none transition-colors focus:border-zinc-600 placeholder:text-zinc-700"
-              />
-            </div>
-          </div>
-
-          {/* Error Message */}
-          {error && (
-            <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
-              {error}
-            </div>
-          )}
-
-          {/* Button */}
-          <button
-            onClick={handleJoin}
-            disabled={!canJoin || isConnecting}
-            className={`w-full mt-5 py-2.5 rounded-lg border-none text-sm font-semibold transition-opacity ${
-              canJoin && !isConnecting
-                ? "bg-gradient-to-br from-indigo-500 to-violet-500 text-white cursor-pointer hover:opacity-90"
-                : "bg-zinc-800 text-zinc-600 cursor-not-allowed"
-            }`}
-          >
-            {isConnecting ? "Connecting..." : "Join Room"}
-          </button>
-        </div>
-      </div>
+      <HomePage onJoin={handleJoin} error={error} isConnecting={isConnecting} />
     );
   }
 
-  /* ── Editor ── */
   return (
-    <div className="flex flex-col h-screen bg-[#0a0a0c] font-sans">
-      {/* Header */}
-      <header className="flex justify-between items-center px-4 h-10 border-b border-[#1a1a1f] bg-[#0e0e12] shrink-0">
-        <div className="flex items-center gap-2.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-400 shadow-[0_0_8px_#4ade8066]" />
-          <span className="text-[13px] font-medium text-zinc-400 tracking-tight">
-            CollabEdit
-          </span>
-        </div>
-        <span className="text-[11px] text-zinc-600 bg-[#18181b] px-2.5 py-0.5 rounded-md border border-zinc-800 font-mono">
-          {roomId}
-        </span>
-      </header>
-
-      {/* Editor + Sidebar */}
-      <div className="flex flex-1 overflow-hidden">
-        <div className="flex-1 overflow-hidden">
-          <Editor
-            width="100%"
-            height="100%"
-            defaultLanguage="typescript"
-            theme="vs-dark"
-            onMount={handleEditorOnMount}
-            onChange={handleEditorChange}
-            options={{
-              automaticLayout: true,
-              minimap: { enabled: false },
-              scrollBeyondLastLine: false,
-              fixedOverflowWidgets: true,
-              fontSize: 14,
-              lineHeight: 22,
-              padding: { top: 12 },
-            }}
-          />
-        </div>
-        <UsersSideBar />
-      </div>
-    </div>
+    <EditorPage
+      roomId={roomId}
+      userId={userId}
+      name={name}
+      onRoomIdChange={setRoomId}
+      setError={setError}
+      setIsConnecting={setIsConnecting}
+      setJoined={setJoined}
+    />
   );
 }

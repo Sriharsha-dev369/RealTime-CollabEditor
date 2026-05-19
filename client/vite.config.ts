@@ -5,4 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  server: {
+    host: true, //other people on same wifi can locally run in browser only (can inject , into server)
+  },
 });
